@@ -11,6 +11,8 @@ public enum HookInstaller {
         Spec(event: "SessionEnd", matcher: nil, async: true),
         Spec(event: "UserPromptSubmit", matcher: nil, async: true),
         Spec(event: "PreToolUse", matcher: "*", async: true),
+        Spec(event: "PostToolUse", matcher: "*", async: true),
+        Spec(event: "PostToolUseFailure", matcher: "*", async: true),
         Spec(event: "PermissionRequest", matcher: "*", async: false),   // must block for a decision
         Spec(event: "Notification", matcher: "*", async: true),
         Spec(event: "Stop", matcher: nil, async: true),

@@ -55,6 +55,9 @@ struct Session: Identifiable, Equatable {
     var cwd: String?
     var meta: TriageMeta?
 
+    /// The agent process (Claude Code) this session belongs to, from the hook's ancestor chain.
+    var agentPID: Int? { meta?.chain?.first(where: { $0.name == "claude" })?.pid }
+
     init(id: UUID = UUID(), externalID: String? = nil, name: String, source: SessionSource,
          state: SessionState, detail: String, lastActivity: Date = Date(),
          cwd: String? = nil, meta: TriageMeta? = nil) {
@@ -71,12 +74,10 @@ struct AttentionRequest: Identifiable, Equatable {
     var title: String
     var detail: String
     var decide: (Bool) -> Void
-    /// Bundle id of the app the request came from (terminal / Subspace / ...).
-    var hostBundleID: String? = nil
-    var hostName: String? = nil
-    /// The host app is in front, so its own prompt is visible: don't auto-open the island.
-    /// The request can still be answered from the island.
-    var deferred = false
+    /// Hands the request back to the app's own prompt (replies with no decision). Only safe
+    /// when the host shows a native prompt; elsewhere it can act as a denial.
+    var canHandBack = false
+    var release: () -> Void = {}
 
     static func == (a: Self, b: Self) -> Bool { a.id == b.id }
 }

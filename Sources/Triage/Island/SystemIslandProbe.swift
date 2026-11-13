@@ -58,6 +58,7 @@ final class SystemIslandProbe {
     private(set) var status: Status = .idle { didSet { onStatus?(status) } }
     var onStatus: ((Status) -> Void)?
     private var task: Task<Void, Never>?
+    private var lastLogged: CGFloat?
     private unowned let model: IslandModel
 
     init(model: IslandModel) { self.model = model }
@@ -66,12 +67,17 @@ final class SystemIslandProbe {
 
     func start() {
         guard task == nil else { return }
-        guard Self.hasPermission else { status = .needsPermission; return }
-        status = .running
+        if !Self.hasPermission {
+            status = .needsPermission
+            _ = CGRequestScreenCaptureAccess()          // shows the system prompt once
+            TriageLog.write("probe: waiting for Screen Recording permission")
+        }
         task = Task { [weak self] in
+            // Keep checking until permission is granted, then sample continuously.
             while !Task.isCancelled {
-                await self?.sample()
-                try? await Task.sleep(for: .milliseconds(500))
+                if Self.hasPermission { await self?.sample() }
+                else { await MainActor.run { self?.status = .needsPermission } }
+                try? await Task.sleep(for: .milliseconds(Self.hasPermission ? 500 : 2000))
             }
         }
     }
@@ -102,6 +108,10 @@ final class SystemIslandProbe {
             cfg.showsCursor = false
             let img = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
             let measured = SystemIslandMeasure.width(in: img, scale: scale)
+            if measured.map({ Int($0 / 4) }) != lastLogged.map({ Int($0 / 4) }) || (measured == nil) != (lastLogged == nil) {
+                TriageLog.write("probe: system island width = \(measured.map { String(format: "%.0f", $0) } ?? "unknown")pt")
+                lastLogged = measured
+            }
             model.measuredIslandWidth = measured
             // Spotlight / Siri open the island wide; get out of the way until it closes again.
             model.yielding = (measured ?? 0) > 420

@@ -23,15 +23,18 @@ final class IslandController {
 
     private var defaults: UserDefaults { .standard }
     private var hoverOpen: Bool { defaults.object(forKey: Pref.hoverOpen) as? Bool ?? true }
-    private var hoverDelay: Double { defaults.object(forKey: Pref.hoverDelay) as? Double ?? 0.25 }
+    private var hoverDelay: Double { defaults.object(forKey: Pref.hoverDelay) as? Double ?? 0.5 }
     private var autoOpen: Bool { defaults.object(forKey: Pref.autoOpenOnAttention) as? Bool ?? true }
     private var holdWhenFocused: Bool { defaults.object(forKey: Pref.holdWhenFocused) as? Bool ?? true }
+    private var approvalTimeout: Double { defaults.object(forKey: Pref.approvalTimeout) as? Double ?? 45 }
     private var autoCollapse: Double { defaults.object(forKey: Pref.autoCollapseSeconds) as? Double ?? 12 }
 
     func start() {
         let panel = IslandPanel()
         let host = IslandHostingView(rootView: IslandView(model: model, onResolve: { [weak self] approve in
             self?.resolve(approve: approve)
+        }, onSkip: { [weak self] in
+            self?.skipFirst()
         }, onJump: { [weak self] session in
             self?.jump(to: session)
         }))
@@ -50,25 +53,22 @@ final class IslandController {
             MainActor.assumeIsolated { self?.reposition() }
         }
         startServer()
+        Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.model.pruneDead(isAlive: { kill(pid_t($0), 0) == 0 || errno == EPERM })
+            }
+        }
         applyPillWidthMode()
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyPillWidthMode() }
-        }
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
-            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            MainActor.assumeIsolated {
-                guard let self, self.model.revealDeferred(frontmostBundleID: app?.bundleIdentifier) else { return }
-                self.attentionArrived()
-            }
         }
         let handler: (NSEvent) -> Void = { [weak self] _ in
             MainActor.assumeIsolated { self?.mouseMoved() }
         }
         if let c = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.model.mode != .collapsed else { return }
+                guard let self, self.model.mode != .collapsed, self.model.attention == nil else { return }
                 self.openedByAttention = false
                 self.set(.collapsed)
             }
@@ -100,12 +100,17 @@ final class IslandController {
     func handleHook(_ data: Data, _ conn: HookConnection) {
         guard let event = HookEvent.decode(data) else { conn.reply(Data()); return }
         if event.eventName == "PermissionRequest" {
-            let host = focuser.hostApp(for: event.triage)
-            let hostID = host?.bundleIdentifier
-            let hold = holdWhenFocused && hostID != nil
-                && hostID == NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-            TriageLog.write("PermissionRequest session=\(event.sessionID ?? "?") tool=\(event.toolName ?? "?") host=\(hostID ?? "none") frontmost=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none") hold=\(hold)")
-            let id = model.addPermission(event, hostBundleID: hostID, hostName: host?.localizedName, deferred: hold) { approve in
+            let hostID = focuser.hostApp(for: event.triage)?.bundleIdentifier
+            let frontID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            if ApprovalGate.shouldBypass(enabled: holdWhenFocused, hostBundleID: hostID, frontmostBundleID: frontID) {
+                // The app that sent this is in front: let its own prompt handle it.
+                TriageLog.write("PermissionRequest bypassed (host \(hostID ?? "?") is frontmost) session=\(event.sessionID ?? "?")")
+                conn.reply(Data())
+                return
+            }
+            TriageLog.write("PermissionRequest session=\(event.sessionID ?? "?") tool=\(event.toolName ?? "?") host=\(hostID ?? "none") frontmost=\(frontID ?? "none")")
+            let handBack = ApprovalGate.canHandBack(hostBundleID: hostID)
+            let id = model.addPermission(event, canHandBack: handBack, release: { conn.reply(Data()) }) { approve in
                 TriageLog.write("decision approve=\(approve) session=\(event.sessionID ?? "?")")
                 conn.reply(HookDecision.permissionResponse(allow: approve,
                                                            message: approve ? nil : "Denied from Triage"))
@@ -119,7 +124,18 @@ final class IslandController {
                     if self.model.pending.isEmpty, self.openedByAttention { self.scheduleCollapse(after: 0.6) }
                 }
             }
-            if !hold { attentionArrived() }
+            attentionArrived()
+            if handBack {
+                // Safety net for terminals: never leave an agent waiting on an answer nobody sees.
+                let timeout = approvalTimeout
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(timeout))
+                    guard let self, self.model.pending.contains(where: { $0.id == id }) else { return }
+                    TriageLog.write("request unanswered for \(Int(timeout))s: handed back to the terminal's prompt session=\(event.sessionID ?? "?")")
+                    self.model.release(id: id)
+                    if self.model.pending.isEmpty { self.scheduleCollapse(after: 0.3) }
+                }
+            }
         } else {
             TriageLog.write("\(event.eventName) session=\(event.sessionID ?? "?")")
             model.apply(event)
@@ -159,6 +175,13 @@ final class IslandController {
         scheduleCollapse(after: 0.15)
     }
 
+    /// "Skip": hand the oldest request back to the terminal's own prompt.
+    func skipFirst() {
+        guard let id = model.attention?.id else { return }
+        model.release(id: id)
+        if model.pending.isEmpty { scheduleCollapse(after: 0.3) }
+    }
+
     func simulateAttention() {
         model.simulateAttention()
         attentionArrived()
@@ -177,7 +200,8 @@ final class IslandController {
         collapseTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled, let self else { return }
-            if self.model.attention == nil || self.openedByAttention {
+            // Never hide the island while a request is waiting on the user.
+            if self.model.attention == nil {
                 self.openedByAttention = false
                 self.set(.collapsed)
             }
@@ -203,7 +227,9 @@ final class IslandController {
 
     private func mouseMoved() {
         guard isVisible else { return }
-        let inside = model.size != .zero && currentRect.insetBy(dx: -8, dy: -8).contains(NSEvent.mouseLocation)
+        // Opening needs the pointer squarely on the pill; staying open gets a little slack.
+        let slack: CGFloat = model.mode == .collapsed ? 0 : 8
+        let inside = model.size != .zero && currentRect.insetBy(dx: -slack, dy: -slack).contains(NSEvent.mouseLocation)
         if inside {
             collapseTask?.cancel()
             guard hoverOpen, model.mode == .collapsed, hoverTask == nil else { return }

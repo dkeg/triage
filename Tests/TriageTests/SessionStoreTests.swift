@@ -75,26 +75,17 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertTrue(m.pending.isEmpty)
     }
 
-    func testDeferredRequestStaysAnswerableAndRevealsWhenHostLeavesFront() {
-        let m = IslandModel()
-        var answered: Bool?
-        m.addPermission(event("PermissionRequest", #","tool_name":"Bash""#), hostBundleID: "com.x.term", deferred: true) { answered = $0 }
-        XCTAssertEqual(m.attention?.deferred, true)     // present (answerable from the island) but not auto-opened
-        XCTAssertFalse(m.revealDeferred(frontmostBundleID: "com.x.term"))
-        XCTAssertEqual(m.attention?.deferred, true)
-        XCTAssertTrue(m.revealDeferred(frontmostBundleID: "com.apple.Safari"))   // host left the front -> auto-open
-        XCTAssertEqual(m.attention?.deferred, false)
-        m.resolve(approve: true)
-        XCTAssertEqual(answered, true)
-    }
-
-    func testDeferredRequestCanBeApprovedWhileHeld() {
-        let m = IslandModel()
-        var answered: Bool?
-        m.addPermission(event("PermissionRequest", #","tool_name":"Bash""#), hostBundleID: "h", deferred: true) { answered = $0 }
-        m.resolve(approve: true)
-        XCTAssertEqual(answered, true)
-        XCTAssertTrue(m.pending.isEmpty)
+    func testApprovalGateOnlyBypassesTerminalsThatShowNativePrompt() {
+        let t = "com.apple.Terminal"
+        XCTAssertTrue(ApprovalGate.shouldBypass(enabled: true, hostBundleID: t, frontmostBundleID: t))
+        XCTAssertFalse(ApprovalGate.shouldBypass(enabled: true, hostBundleID: t, frontmostBundleID: "x"))
+        XCTAssertFalse(ApprovalGate.shouldBypass(enabled: false, hostBundleID: t, frontmostBundleID: t))
+        // Subspace-hosted sessions must never get an empty answer (it can act as a denial).
+        XCTAssertFalse(ApprovalGate.shouldBypass(enabled: true, hostBundleID: "com.subspace.app",
+                                                 frontmostBundleID: "com.subspace.app"))
+        XCTAssertFalse(ApprovalGate.shouldBypass(enabled: true, hostBundleID: nil, frontmostBundleID: nil))
+        XCTAssertTrue(ApprovalGate.canHandBack(hostBundleID: "com.googlecode.iterm2"))
+        XCTAssertFalse(ApprovalGate.canHandBack(hostBundleID: "com.subspace.app"))
     }
 
     func testExpandedIsWiderThanCollapsed() {
@@ -105,5 +96,43 @@ final class SessionStoreTests: XCTestCase {
         m.mode = .expanded
         XCTAssertEqual(m.size.width, IslandModel.expandedWidth)
         XCTAssertLessThanOrEqual(IslandModel.expandedWidth, IslandGeometry.canvas.width)
+    }
+
+    func testPermissionNotificationDoesNotLeaveStaleWaiting() {
+        let m = IslandModel()
+        m.apply(event("Notification", #","notification_type":"permission_prompt","message":"needs permission""#))
+        XCTAssertNotEqual(m.sessions[0].state, .needsInput)
+    }
+
+    func testElicitationMarksWaitingAndToolCompletionClearsIt() {
+        let m = IslandModel()
+        m.apply(event("Notification", #","notification_type":"elicitation_dialog","message":"Pick one""#))
+        XCTAssertEqual(m.sessions[0].state, .needsInput)
+        m.apply(event("PostToolUse", #","tool_name":"AskUserQuestion""#))
+        XCTAssertEqual(m.sessions[0].state, .running)
+    }
+
+    func testReleaseOnlyWhenHandBackIsSafe() {
+        let m = IslandModel()
+        var released = false
+        let unsafe = m.addPermission(event("PermissionRequest", session: "u", #","tool_name":"Bash""#),
+                                     canHandBack: false, release: { released = true }) { _ in }!
+        m.release(id: unsafe)
+        XCTAssertFalse(released); XCTAssertEqual(m.pending.count, 1)   // stays until answered
+        let safe = m.addPermission(event("PermissionRequest", session: "s", #","tool_name":"Bash""#),
+                                   canHandBack: true, release: { released = true }) { _ in }!
+        m.release(id: safe)
+        XCTAssertTrue(released); XCTAssertEqual(m.pending.count, 1)
+    }
+
+    func testPruneDeadSessions() {
+        let m = IslandModel()
+        let live = HookEvent.decode(Data(#"{"hook_event_name":"SessionStart","session_id":"live","cwd":"/a","_triage":{"chain":[{"pid":10,"name":"sh"},{"pid":111,"name":"claude"}]}}"#.utf8))!
+        let dead = HookEvent.decode(Data(#"{"hook_event_name":"SessionStart","session_id":"dead","cwd":"/b","_triage":{"chain":[{"pid":10,"name":"sh"},{"pid":222,"name":"claude"}]}}"#.utf8))!
+        m.apply(live); m.apply(dead)
+        m.addPermission(dead) { _ in }
+        m.pruneDead(isAlive: { $0 == 111 })
+        XCTAssertEqual(m.sessions.map(\.externalID), ["live"])
+        XCTAssertTrue(m.pending.isEmpty)
     }
 }

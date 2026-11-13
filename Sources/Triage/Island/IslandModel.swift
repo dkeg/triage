@@ -74,7 +74,7 @@ final class IslandModel {
         case .expanded:
             let rows = min(sessions.count, 5)
             let body = 44 + CGFloat(rows) * 52 + 8
-            let card: CGFloat = attention == nil ? 0 : (attention?.deferred == true ? 138 : 118)
+            let card: CGFloat = attention == nil ? 0 : 118
             return CGSize(width: Self.expandedWidth, height: band + body + card)
         }
     }

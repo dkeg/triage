@@ -52,12 +52,19 @@ extension IslandModel {
             case "idle_prompt":
                 sessions[i].state = .done
                 sessions[i].detail = "Waiting for your next prompt"
-            case "permission_prompt", "elicitation_dialog", "agent_needs_input":
+            case "elicitation_dialog", "agent_needs_input":
                 sessions[i].state = .needsInput
                 sessions[i].detail = snippet(e.message)
+            case "permission_prompt":
+                // Real approvals arrive as PermissionRequest. When another app's own prompt
+                // handles one, marking "waiting" here would never be cleared.
+                break
             default:
                 if let m = e.message, !m.isEmpty { sessions[i].detail = snippet(m) }
             }
+        case "PostToolUse", "PostToolUseFailure":
+            // A tool finished, so whatever it was waiting on has been answered.
+            if !pending.contains(where: { $0.sessionID == sessions[i].id }) { sessions[i].state = .running }
         case "Stop":
             sessions[i].state = .done
             sessions[i].detail = snippet(e.lastAssistantMessage).isEmpty ? "Finished" : snippet(e.lastAssistantMessage)
@@ -68,7 +75,7 @@ extension IslandModel {
 
     /// Registers a blocking permission request. Returns its id so it can be cancelled.
     @discardableResult
-    func addPermission(_ e: HookEvent, hostBundleID: String? = nil, hostName: String? = nil, deferred: Bool = false,
+    func addPermission(_ e: HookEvent, canHandBack: Bool = false, release: @escaping () -> Void = {},
                        decide: @escaping (Bool) -> Void) -> UUID? {
         guard let i = upsertSession(for: e) else { return nil }
         let session = sessions[i]
@@ -78,7 +85,7 @@ extension IslandModel {
         let req = AttentionRequest(id: UUID(), sessionID: session.id,
                                    title: e.toolSummary ?? e.toolName ?? "Permission request",
                                    detail: "\(session.name) wants to use \(e.toolName ?? "a tool")",
-                                   decide: decide, hostBundleID: hostBundleID, hostName: hostName, deferred: deferred)
+                                   decide: decide, canHandBack: canHandBack, release: release)
         pending.append(req)
         return req.id
     }
@@ -91,16 +98,25 @@ extension IslandModel {
         markResolved(sessionID: sid)
     }
 
-    /// Reveals held-back requests whose host app is no longer in front.
-    /// Returns true if any became visible.
-    @discardableResult
-    func revealDeferred(frontmostBundleID: String?) -> Bool {
-        var revealed = false
-        for i in pending.indices where pending[i].deferred && pending[i].hostBundleID != frontmostBundleID {
-            pending[i].deferred = false
-            revealed = true
+    /// Hands a pending request back to the app's own prompt.
+    func release(id: UUID) {
+        guard let idx = pending.firstIndex(where: { $0.id == id }), pending[idx].canHandBack else { return }
+        let req = pending.remove(at: idx)
+        req.release()
+        markResolved(sessionID: req.sessionID)
+    }
+
+    /// Drops sessions whose agent process has exited (crash, kill -9: no SessionEnd), and
+    /// long-silent sessions we can't check.
+    func pruneDead(isAlive: (Int) -> Bool, now: Date = Date(), maxIdle: TimeInterval = 12 * 3600) {
+        let dead = sessions.filter { s in
+            if let pid = s.agentPID { return !isAlive(pid) }
+            return now.timeIntervalSince(s.lastActivity) > maxIdle
         }
-        return revealed
+        guard !dead.isEmpty else { return }
+        let ids = Set(dead.map(\.id))
+        pending.removeAll { ids.contains($0.sessionID) }
+        sessions.removeAll { ids.contains($0.id) }
     }
 
     func markResolved(sessionID: UUID) {

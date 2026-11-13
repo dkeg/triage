@@ -3,6 +3,7 @@ import SwiftUI
 struct IslandView: View {
     @Bindable var model: IslandModel
     var onResolve: (Bool) -> Void = { _ in }
+    var onSkip: () -> Void = {}
     var onJump: (Session) -> Void = { _ in }
 
     var body: some View {
@@ -31,28 +32,27 @@ struct IslandView: View {
         .preferredColorScheme(.dark)
     }
 
-    /// Collapsed: the rim is transparent beside the hardware island (no seam where the two
-    /// meet) and becomes opaque toward the outer ends, so it reads like the island's own rim
-    /// wrapping around a Live Activity. Expanded: uniform rim.
+    /// Collapsed: the rim is opaque at the outer ends and fades to transparent where the wing
+    /// meets the hardware island, like the island's own rim wrapping a Live Activity. The fade
+    /// is anchored to the visible wings, so it is actually visible. Expanded: uniform rim.
     private var rim: AnyShapeStyle {
-        if model.mode == .collapsed {
-            return AnyShapeStyle(LinearGradient(
-                stops: [.init(color: .white.opacity(0.26), location: 0),
-                        .init(color: .white.opacity(0.18), location: 0.2),
-                        .init(color: .white.opacity(0), location: 0.4),
-                        .init(color: .white.opacity(0), location: 0.6),
-                        .init(color: .white.opacity(0.18), location: 0.8),
-                        .init(color: .white.opacity(0.26), location: 1)],
-                startPoint: .leading, endPoint: .trailing))
-        }
-        return AnyShapeStyle(Color.white.opacity(0.2))
+        guard model.mode == .collapsed, model.size.width > 0 else { return AnyShapeStyle(Color.white.opacity(0.2)) }
+        let wing = min(IslandModel.wing / model.size.width, 0.45)
+        return AnyShapeStyle(LinearGradient(
+            stops: [.init(color: .white.opacity(0.55), location: 0),
+                    .init(color: .white.opacity(0.28), location: wing * 0.5),
+                    .init(color: .white.opacity(0.0), location: wing),
+                    .init(color: .white.opacity(0.0), location: 1 - wing),
+                    .init(color: .white.opacity(0.28), location: 1 - wing * 0.5),
+                    .init(color: .white.opacity(0.55), location: 1)],
+            startPoint: .leading, endPoint: .trailing))
     }
 
     @ViewBuilder private var content: some View {
         switch model.mode {
         case .collapsed: CollapsedContent(model: model)
         case .peek: PeekContent(model: model)
-        case .expanded: ExpandedContent(model: model, onResolve: onResolve, onJump: onJump)
+        case .expanded: ExpandedContent(model: model, onResolve: onResolve, onSkip: onSkip, onJump: onJump)
         }
     }
 }
@@ -110,6 +110,7 @@ private struct PeekContent: View {
 private struct ExpandedContent: View {
     @Bindable var model: IslandModel
     let onResolve: (Bool) -> Void
+    let onSkip: () -> Void
     let onJump: (Session) -> Void
     var body: some View {
         VStack(spacing: 0) {
@@ -127,7 +128,7 @@ private struct ExpandedContent: View {
             if let a = model.attention {
                 AttentionCard(request: a, more: model.pending.count - 1,
                               approve: { onResolve(true) },
-                              deny: { onResolve(false) })
+                              deny: { onResolve(false) }, skip: onSkip)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 8)
             }
@@ -146,12 +147,9 @@ private struct AttentionCard: View {
     let more: Int
     let approve: () -> Void
     let deny: () -> Void
+    let skip: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if request.deferred {
-                Text("\(request.hostName ?? "The agent's app") is in front — answer there, or here.")
-                    .font(.system(size: 10, weight: .medium)).foregroundStyle(.orange.opacity(0.8))
-            }
             Text(request.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             Text(request.title)
                 .font(.system(size: 12, design: .monospaced))
@@ -160,6 +158,10 @@ private struct AttentionCard: View {
             HStack(spacing: 8) {
                 Button("Deny", action: deny).buttonStyle(.bordered)
                 Button("Approve", action: approve).buttonStyle(.borderedProminent).tint(.orange)
+                if request.canHandBack {
+                    Button("Skip", action: skip).buttonStyle(.plain)
+                        .foregroundStyle(.white.opacity(0.55)).help("Answer in the terminal's own prompt instead")
+                }
                 Spacer()
                 if more > 0 {
                     Text("+\(more) more").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
