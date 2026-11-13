@@ -14,7 +14,7 @@ if let cmd = CommandLine.arguments.dropFirst().first {
             print("Installed hooks into \(HookInstaller.defaultSettingsURL.path)\nHelper: \(helper.path)")
         } catch { FileHandle.standardError.write(Data("install failed: \(error.localizedDescription)\n".utf8)); exit(1) }
     case "uninstall":
-        do { try HookInstaller.uninstall(); print("Removed Triage hooks.") }
+        do { try HookInstaller.uninstall(); print("Removed triage hooks.") }
         catch { FileHandle.standardError.write(Data("uninstall failed: \(error.localizedDescription)\n".utf8)); exit(1) }
     case "status":
         print(HookInstaller.isInstalled() ? "installed" : "not installed")

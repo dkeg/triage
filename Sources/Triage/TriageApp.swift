@@ -6,14 +6,14 @@ struct TriageApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        MenuBarExtra("Triage", systemImage: "capsule.tophalf.filled") {
+        MenuBarExtra("triage", systemImage: "capsule.tophalf.filled") {
             Button("Toggle Island") { IslandController.shared.toggleVisibility() }
             Button("Simulate Request (demo)") { IslandController.shared.simulateAttention() }
             Divider()
             Button("Settings…") { SettingsWindow.show() }
                 .keyboardShortcut(",")
             Divider()
-            Button("Quit Triage") { NSApplication.shared.terminate(nil) }
+            Button("Quit triage") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         }
     }
@@ -30,8 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.set(true, forKey: key)
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Start Triage at login?"
-        alert.informativeText = "When Triage isn't running, nothing is sent to it and permission prompts appear in your agent as usual. Starting at login keeps approvals available in the island. You can change this any time in Settings."
+        alert.messageText = "Start triage at login?"
+        alert.informativeText = "When triage isn't running, nothing is sent to it and permission prompts appear in your agent as usual. Starting at login keeps approvals available in the island. You can change this any time in Settings."
         alert.addButton(withTitle: "Start at Login")
         alert.addButton(withTitle: "Not Now")
         if alert.runModal() == .alertFirstButtonReturn {

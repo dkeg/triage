@@ -26,7 +26,7 @@ struct SettingsView: View {
                 }.disabled(!hoverOpen)
                 Toggle("Auto-open when a session needs me", isOn: $autoOpen)
                 Toggle("Skip approvals from the app that's in front", isOn: $holdWhenFocused)
-                Text("For terminal sessions: if the terminal is in front, Triage stays out of the way and you answer in Claude's own prompt. Sessions hosted by other apps (like Subspace) always use the island.")
+                Text("For terminal sessions: if the terminal is in front, triage stays out of the way and you answer in Claude's own prompt. Sessions hosted by other apps (like Subspace) always use the island.")
                     .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Hand back if unanswered") {
                     Slider(value: $approvalTimeout, in: 15...300, step: 5) { Text("") }.frame(width: 160)
@@ -50,7 +50,7 @@ struct SettingsView: View {
                     switch PillWidthMode(rawValue: pillWidth) ?? .wide {
                     case .compact: Text("Hugs the hardware island. Status text can sit under the system island while it shows a Live Activity.")
                     case .wide: Text("Fixed width that clears a system Live Activity such as Music or a timer.")
-                    case .auto: Text("Widens only when the system island does, and steps aside while Spotlight or Siri is open. Triage reads a thin strip of the screen to measure the island's width; nothing is stored or sent.")
+                    case .auto: Text("Widens only when the system island does, and steps aside while Spotlight or Siri is open. triage reads a thin strip of the screen to measure the island's width; nothing is stored or sent.")
                     }
                 }.font(.caption).foregroundStyle(.secondary)
                 if pillWidth == PillWidthMode.auto.rawValue && !screenAccess {
@@ -64,7 +64,7 @@ struct SettingsView: View {
                             screenAccess = SystemIslandProbe.hasPermission
                         }
                     }
-                    Text("Until it's granted, Auto behaves like Wide. After granting, re-select Auto or relaunch Triage.")
+                    Text("Until it's granted, Auto behaves like Wide. After granting, re-select Auto or relaunch triage.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -77,7 +77,7 @@ struct SettingsView: View {
                     Button(hooksInstalled ? "Reinstall" : "Install Hooks") { install() }
                     if hooksInstalled { Button("Remove") { remove() } }
                 }
-                Text("Adds Triage's entries to ~/.claude/settings.json and leaves your other hooks untouched. A one-time backup is saved as settings.json.triage-backup.")
+                Text("Adds triage's entries to ~/.claude/settings.json and leaves your other hooks untouched. A one-time backup is saved as settings.json.triage-backup.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let hookError { Text(hookError).font(.caption).foregroundStyle(.red) }
             }

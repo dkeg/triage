@@ -10,7 +10,7 @@ enum SettingsWindow {
     static func show() {
         if window == nil {
             let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
-            w.title = "Triage Settings"
+            w.title = "triage Settings"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.center()

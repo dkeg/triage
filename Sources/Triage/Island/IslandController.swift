@@ -115,7 +115,7 @@ final class IslandController {
             let id = model.addPermission(event, canHandBack: handBack, release: { conn.reply(Data()) }) { approve in
                 TriageLog.write("decision approve=\(approve) session=\(event.sessionID ?? "?")")
                 conn.reply(HookDecision.permissionResponse(allow: approve,
-                                                           message: approve ? nil : "Denied from Triage"))
+                                                           message: approve ? nil : "Denied from triage"))
             }
             guard let id else { conn.reply(Data()); return }
             conn.setOnClose { [weak self] in

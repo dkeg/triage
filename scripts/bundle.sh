@@ -16,14 +16,15 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>app.triage.Triage</string>
-  <key>CFBundleName</key><string>Triage</string>
+  <key>CFBundleName</key><string>triage</string>
+  <key>CFBundleDisplayName</key><string>triage</string>
   <key>CFBundleExecutable</key><string>Triage</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
-  <key>NSAppleEventsUsageDescription</key><string>Triage brings the right Terminal or iTerm2 tab forward when you jump to a session.</string>
+  <key>NSAppleEventsUsageDescription</key><string>triage brings the right Terminal or iTerm2 tab forward when you jump to a session.</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
