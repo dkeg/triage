@@ -67,7 +67,7 @@ final class IslandModel {
     var needsInputCount: Int { sessions.filter { $0.state == .needsInput }.count }
 
     /// The hardware island floats about this far below the top screen edge; we match it.
-    static let topInset: CGFloat = 5
+    static let topInset: CGFloat = 6
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let wideReserve: CGFloat = 150
     static let wing: CGFloat = 80
