@@ -4,6 +4,32 @@ import TriageCore
 
 enum IslandMode: Equatable { case collapsed, peek, expanded }
 
+/// How the collapsed pill's edge and fill are drawn.
+enum RimStyle: String, CaseIterable, Identifiable {
+    /// Two separate floating pills either side of the hardware island (clear in the middle),
+    /// like a Live Activity.
+    case wingsOnly
+    /// Rim bright at the outer ends, fading to transparent beside the hardware island.
+    case outwardFade
+    /// Rim bright beside the hardware island, fading toward the outer ends.
+    case inwardFade
+    /// Thin rim; the fill goes from semi-transparent inside to solid black at the outer ends.
+    case fillFade
+    case uniform
+    case none
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .wingsOnly: "Wing pills"
+        case .outwardFade: "Outer glow"
+        case .inwardFade: "Inner glow"
+        case .fillFade: "Fill fade"
+        case .uniform: "Uniform"
+        case .none: "None"
+        }
+    }
+}
+
 /// How wide the collapsed pill is.
 enum PillWidthMode: String, CaseIterable, Identifiable {
     /// Hugs the hardware island.

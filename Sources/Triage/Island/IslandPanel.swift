@@ -22,15 +22,16 @@ final class IslandPanel: NSPanel {
 /// Only claims mouse events inside the island's current rect so the transparent
 /// remainder of the canvas stays click-through.
 final class IslandHostingView<Content: View>: NSHostingView<Content> {
-    /// Active region relative to the window, origin bottom-left, evaluated live.
-    var activeRect: () -> CGRect = { .zero }
+    /// Active regions relative to the window, origin bottom-left, evaluated live.
+    var activeRects: () -> [CGRect] = { [] }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        var r = activeRect()
-        // NSHostingView is flipped (origin top-left); the rect above is bottom-left.
-        if isFlipped { r.origin.y = bounds.height - r.maxY }
-        let hit = r.contains(local)
-        return hit ? super.hitTest(point) : nil
+        for var r in activeRects() {
+            // NSHostingView is flipped (origin top-left); the rects are bottom-left.
+            if isFlipped { r.origin.y = bounds.height - r.maxY }
+            if r.contains(local) { return super.hitTest(point) }
+        }
+        return nil
     }
 }
 

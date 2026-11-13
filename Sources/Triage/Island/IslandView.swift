@@ -2,6 +2,8 @@ import SwiftUI
 
 struct IslandView: View {
     @Bindable var model: IslandModel
+    @AppStorage(Pref.rimStyle) private var rimStyleRaw = RimStyle.wingsOnly.rawValue
+    private var rimStyle: RimStyle { RimStyle(rawValue: rimStyleRaw) ?? .wingsOnly }
     var onResolve: (Bool) -> Void = { _ in }
     var onSkip: () -> Void = {}
     var onJump: (Session) -> Void = { _ in }
@@ -9,18 +11,26 @@ struct IslandView: View {
     var body: some View {
         let size = model.size
         let shape = RoundedRectangle(cornerRadius: model.cornerRadius, style: .continuous)
-        ZStack(alignment: .top) {
-            shape.fill(.black)
-            content
-                .id(model.mode)
-                .transition(.opacity)
-                .padding(.top, model.mode == .collapsed ? 0 : model.bandHeight)
+        Group {
+            if isWingPills {
+                // Two separate floating pills either side of the hardware island.
+                WingPills(model: model)
+                    .frame(width: size.width, height: size.height)
+            } else {
+            ZStack(alignment: .top) {
+                shape.fill(fill)
+                content
+                    .id(model.mode)
+                    .transition(.opacity)
+                    .padding(.top, model.mode == .collapsed ? 0 : model.bandHeight)
+            }
+            .frame(width: size.width, height: size.height)
+            .clipShape(shape)
+            // Thin rim, like the system island shows when a Live Activity is active.
+            .overlay(shape.strokeBorder(rim, lineWidth: 1.5))
+            .shadow(color: .black.opacity(size == .zero ? 0 : 0.35), radius: 10, y: 4)
+            }
         }
-        .frame(width: size.width, height: size.height)
-        .clipShape(shape)
-        // Thin rim, like the system island shows when a Live Activity is active.
-        .overlay(shape.strokeBorder(rim, lineWidth: 1.5))
-        .shadow(color: .black.opacity(size == .zero ? 0 : 0.35), radius: 10, y: 4)
         .opacity(size == .zero ? 0 : 1)
         .padding(.top, IslandModel.topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -32,20 +42,66 @@ struct IslandView: View {
         .preferredColorScheme(.dark)
     }
 
-    /// Collapsed: the rim is opaque at the outer ends and fades to transparent where the wing
-    /// meets the hardware island, like the island's own rim wrapping a Live Activity. The fade
-    /// is anchored to the visible wings, so it is actually visible. Expanded: uniform rim.
-    private var rim: AnyShapeStyle {
-        guard model.mode == .collapsed, model.size.width > 0 else { return AnyShapeStyle(Color.white.opacity(0.2)) }
-        let wing = min(IslandModel.wing / model.size.width, 0.45)
+    private var isWingPills: Bool { model.mode == .collapsed && rimStyle == .wingsOnly }
+
+    private var wingFraction: CGFloat {
+        guard model.size.width > 0 else { return 0.25 }
+        return min(IslandModel.wing / model.size.width, 0.45)
+    }
+
+    private func horizontal(_ stops: [(Double, CGFloat)]) -> AnyShapeStyle {
+        AnyShapeStyle(LinearGradient(stops: stops.map { .init(color: .white.opacity($0.0), location: $0.1) },
+                                     startPoint: .leading, endPoint: .trailing))
+    }
+
+    /// How far the wings tuck under the system island so no wallpaper shows between them.
+    private var tuckFraction: CGFloat {
+        model.size.width > 0 ? 6 / model.size.width : 0
+    }
+
+    /// Fill: solid black, except while collapsed in "Wings only" (clear behind the hardware
+    /// island) or "Fill fade" (transparent inside to opaque outside).
+    private var fill: AnyShapeStyle {
+        guard model.mode == .collapsed else { return AnyShapeStyle(Color.black) }
+        let w = wingFraction
+        if rimStyle == .wingsOnly {
+            let edge = w + tuckFraction
+            return AnyShapeStyle(LinearGradient(
+                stops: [.init(color: .black, location: 0),
+                        .init(color: .black, location: edge),
+                        .init(color: .clear, location: edge + 0.004),
+                        .init(color: .clear, location: 1 - edge - 0.004),
+                        .init(color: .black, location: 1 - edge),
+                        .init(color: .black, location: 1)],
+                startPoint: .leading, endPoint: .trailing))
+        }
+        guard rimStyle == .fillFade else { return AnyShapeStyle(Color.black) }
         return AnyShapeStyle(LinearGradient(
-            stops: [.init(color: .white.opacity(0.55), location: 0),
-                    .init(color: .white.opacity(0.28), location: wing * 0.5),
-                    .init(color: .white.opacity(0.0), location: wing),
-                    .init(color: .white.opacity(0.0), location: 1 - wing),
-                    .init(color: .white.opacity(0.28), location: 1 - wing * 0.5),
-                    .init(color: .white.opacity(0.55), location: 1)],
+            stops: [.init(color: .black, location: 0),
+                    .init(color: .black.opacity(0.55), location: w),
+                    .init(color: .black.opacity(0.55), location: 1 - w),
+                    .init(color: .black, location: 1)],
             startPoint: .leading, endPoint: .trailing))
+    }
+
+    /// Collapsed rim per the chosen style. Expanded always gets a plain uniform rim.
+    private var rim: AnyShapeStyle {
+        let plain = AnyShapeStyle(Color.white.opacity(0.2))
+        guard model.mode == .collapsed, model.size.width > 0 else { return plain }
+        let w = wingFraction
+        switch rimStyle {
+        case .wingsOnly:
+            let edge = w + tuckFraction
+            return horizontal([(0.5, 0), (0.32, w * 0.55), (0.0, edge), (0.0, 1 - edge), (0.32, 1 - w * 0.55), (0.5, 1)])
+        case .uniform: return plain
+        case .none: return AnyShapeStyle(Color.clear)
+        case .outwardFade:
+            return horizontal([(0.55, 0), (0.28, w * 0.5), (0, w), (0, 1 - w), (0.28, 1 - w * 0.5), (0.55, 1)])
+        case .inwardFade:
+            return horizontal([(0, 0), (0.18, w * 0.5), (0.5, w), (0.5, 1 - w), (0.18, 1 - w * 0.5), (0, 1)])
+        case .fillFade:
+            return horizontal([(0.3, 0), (0.15, w), (0.15, 1 - w), (0.3, 1)])
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -226,5 +282,43 @@ private struct HostIcon: View {
         } else if let fallback {
             Image(systemName: fallback).frame(width: size).foregroundStyle(.white.opacity(0.7))
         }
+    }
+}
+
+/// Collapsed "Wing pills": each side is its own fully rounded pill with the same thin rim as
+/// the system island; the middle is left clear for the hardware island.
+private struct WingPills: View {
+    let model: IslandModel
+
+    var body: some View {
+        let waiting = model.needsInputCount
+        let working = model.sessions.filter { $0.state == .running }.count
+        HStack(spacing: 0) {
+            pill {
+                HStack(spacing: 7) {
+                    StatusDot(needsInput: waiting > 0)
+                    Text(waiting > 0 ? "\(waiting) waiting" : "All clear")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(waiting > 0 ? Color.orange : .white.opacity(0.9))
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0).frame(width: model.centerReserve)
+            pill {
+                Text("\(working) working")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func pill<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        let shape = Capsule(style: .continuous)
+        return content()
+            .frame(width: IslandModel.wing, height: model.bandHeight)
+            .background(shape.fill(Color.black))
+            .overlay(shape.strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5))
+            .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
     }
 }

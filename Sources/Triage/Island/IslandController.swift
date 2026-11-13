@@ -39,8 +39,8 @@ final class IslandController {
             self?.jump(to: session)
         }))
         host.sizingOptions = []
-        host.activeRect = { [weak self] in
-            MainActor.assumeIsolated { self?.hitRect ?? .zero }
+        host.activeRects = { [weak self] in
+            MainActor.assumeIsolated { self?.hitRects ?? [] }
         }
         panel.contentView = host
         self.panel = panel
@@ -232,11 +232,17 @@ final class IslandController {
         return CGRect(x: g.cutout.midX - s.width / 2, y: top - s.height, width: s.width, height: s.height)
     }
 
-    /// Pill rect in the panel's content-view coordinates, used for click-through hit testing.
-    private var hitRect: CGRect {
-        guard let panel, model.size != .zero else { return .zero }
+    /// Clickable regions in the panel's coordinates. While collapsed only the two wings count,
+    /// so clicks in the middle reach the real island and menu bar underneath.
+    private var hitRects: [CGRect] {
+        guard let panel, model.size != .zero else { return [] }
         let r = currentRect, f = panel.frame
-        return CGRect(x: r.minX - f.minX, y: r.minY - f.minY, width: r.width, height: r.height)
+        func rel(_ x: CGRect) -> CGRect { CGRect(x: x.minX - f.minX, y: x.minY - f.minY, width: x.width, height: x.height) }
+        guard model.mode == .collapsed else { return [rel(r)] }
+        let half = model.centerReserve / 2
+        let wing = r.width / 2 - half
+        return [rel(CGRect(x: r.minX, y: r.minY, width: wing, height: r.height)),
+                rel(CGRect(x: r.midX + half, y: r.minY, width: wing, height: r.height))]
     }
 
     private func mouseMoved() {

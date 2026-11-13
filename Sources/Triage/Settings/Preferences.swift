@@ -7,5 +7,6 @@ enum Pref {
     static let autoCollapseSeconds = "autoCollapseSeconds"
     static let holdWhenFocused = "holdWhenFocused"
     static let pillWidth = "pillWidth"
+    static let rimStyle = "rimStyle"
     static let approvalTimeout = "approvalTimeout"
 }
