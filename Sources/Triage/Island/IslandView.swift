@@ -117,7 +117,7 @@ private struct ExpandedContent: View {
             HStack {
                 Text("Sessions").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
                 Spacer()
-                SettingsLink {
+                Button { SettingsWindow.show() } label: {
                     Image(systemName: "gearshape").foregroundStyle(.white.opacity(0.6))
                 }
                 .buttonStyle(.plain)

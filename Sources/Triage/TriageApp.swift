@@ -10,13 +10,12 @@ struct TriageApp: App {
             Button("Toggle Island") { IslandController.shared.toggleVisibility() }
             Button("Simulate Attention") { IslandController.shared.simulateAttention() }
             Divider()
-            SettingsLink { Text("Settings…") }
+            Button("Settings…") { SettingsWindow.show() }
                 .keyboardShortcut(",")
             Divider()
             Button("Quit Triage") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         }
-        Settings { SettingsView() }
     }
 }
 
@@ -46,7 +45,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             IslandController.shared.start()
             offerLaunchAtLogin()
-            // Dev hook: `open build/Triage.app --args --demo-attention`
+            // Dev hooks: `open build/Triage.app --args --demo-attention` / `--open-settings`
+            if CommandLine.arguments.contains("--open-settings") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1))
+                    SettingsWindow.show()
+                }
+            }
             if CommandLine.arguments.contains("--demo-attention") {
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(1))

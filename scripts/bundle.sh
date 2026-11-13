@@ -27,7 +27,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-# Ad-hoc sign for local runs. Release builds use a Developer ID identity + notarization.
-codesign --force --sign "${SIGN_IDENTITY:--}" "$APP/Contents/MacOS/triage-hook"
-codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
+# Sign with a stable identity when one exists (macOS keeps Screen Recording and other grants
+# across rebuilds only for a stable signature); otherwise ad-hoc. Release builds should pass
+# SIGN_IDENTITY="Developer ID Application: ..." and notarize.
+IDENTITY="${SIGN_IDENTITY:-}"
+if [ -z "$IDENTITY" ]; then
+  IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | sed -E 's/.*"(.*)".*/\1/')"
+fi
+IDENTITY="${IDENTITY:--}"
+sign() { codesign --force --sign "$IDENTITY" "$1" 2>/dev/null || codesign --force --sign - "$1"; }
+sign "$APP/Contents/MacOS/triage-hook"
+sign "$APP"
+echo "Signed with: $IDENTITY"
 echo "Built $APP"
