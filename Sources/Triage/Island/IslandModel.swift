@@ -71,6 +71,8 @@ final class IslandModel {
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let wideReserve: CGFloat = 150
     static let wing: CGFloat = 80
+    /// The right-hand pill sits this much closer to the hardware island than the left one.
+    static let rightPillPull: CGFloat = 3
     static let expandedWidth: CGFloat = 620
 
     /// Width kept clear in the middle for the system island.

@@ -310,6 +310,7 @@ private struct WingPills: View {
                     .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1)
             }
+            .offset(x: -IslandModel.rightPillPull)
         }
     }
 

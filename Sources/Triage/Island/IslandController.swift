@@ -242,7 +242,7 @@ final class IslandController {
         let half = model.centerReserve / 2
         let wing = r.width / 2 - half
         return [rel(CGRect(x: r.minX, y: r.minY, width: wing, height: r.height)),
-                rel(CGRect(x: r.midX + half, y: r.minY, width: wing, height: r.height))]
+                rel(CGRect(x: r.midX + half - IslandModel.rightPillPull, y: r.minY, width: wing, height: r.height))]
     }
 
     private func mouseMoved() {
