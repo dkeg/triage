@@ -17,13 +17,19 @@ public enum HookClient {
 
     /// Adds `_triage` context (parent pid, terminal env) to a raw hook payload.
     public static func enrich(_ raw: Data, ppid: Int32 = getppid(),
-                              environment: [String: String] = ProcessInfo.processInfo.environment) -> Data {
+                              environment: [String: String] = ProcessInfo.processInfo.environment,
+                              chain: [ProcRef]? = nil, tty: String? = nil) -> Data {
         guard var obj = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any] else { return raw }
         let keys = ["TERM_PROGRAM", "ITERM_SESSION_ID", "TERM_SESSION_ID", "TMUX", "TMUX_PANE",
                     "__CFBundleIdentifier", "TTY", "SUPACODE_WORKTREE", "WARP_SESSION_ID"]
         var env: [String: String] = [:]
         for k in keys { if let v = environment[k] { env[k] = v } }
-        obj["_triage"] = ["ppid": Int(ppid), "env": env] as [String: Any]
+        var meta: [String: Any] = ["ppid": Int(ppid), "env": env]
+        // The hook's own parent is the shell wrapper; walk up from there to find the host app.
+        let procs = chain ?? ([ProcRef(pid: Int(ppid), name: ProcessTree.name(of: ppid))] + ProcessTree.ancestry(of: ppid))
+        meta["chain"] = procs.map { ["pid": $0.pid, "name": $0.name] as [String: Any] }
+        if let t = tty ?? ProcessTree.nearestTTY(from: ppid) { meta["tty"] = t }
+        obj["_triage"] = meta
         return (try? JSONSerialization.data(withJSONObject: obj)) ?? raw
     }
 }

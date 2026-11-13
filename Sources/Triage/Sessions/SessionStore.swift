@@ -14,10 +14,13 @@ extension IslandModel {
         guard let ext = e.sessionID else { return nil }
         if let i = sessions.firstIndex(where: { $0.externalID == ext }) {
             if let t = e.sessionTitle, !t.isEmpty { sessions[i].name = t }
+            if let c = e.cwd { sessions[i].cwd = c }
+            if let m = e.triage { sessions[i].meta = m }
             return i
         }
         let name = e.sessionTitle ?? e.folderName ?? "Claude Code"
-        sessions.append(Session(externalID: ext, name: name, source: .claudeCode, state: .idle, detail: ""))
+        sessions.append(Session(externalID: ext, name: name, source: .claudeCode, state: .idle, detail: "",
+                                cwd: e.cwd, meta: e.triage))
         return sessions.count - 1
     }
 
@@ -65,7 +68,8 @@ extension IslandModel {
 
     /// Registers a blocking permission request. Returns its id so it can be cancelled.
     @discardableResult
-    func addPermission(_ e: HookEvent, decide: @escaping (Bool) -> Void) -> UUID? {
+    func addPermission(_ e: HookEvent, hostBundleID: String? = nil, hostName: String? = nil, deferred: Bool = false,
+                       decide: @escaping (Bool) -> Void) -> UUID? {
         guard let i = upsertSession(for: e) else { return nil }
         let session = sessions[i]
         sessions[i].state = .needsInput
@@ -74,7 +78,7 @@ extension IslandModel {
         let req = AttentionRequest(id: UUID(), sessionID: session.id,
                                    title: e.toolSummary ?? e.toolName ?? "Permission request",
                                    detail: "\(session.name) wants to use \(e.toolName ?? "a tool")",
-                                   decide: decide)
+                                   decide: decide, hostBundleID: hostBundleID, hostName: hostName, deferred: deferred)
         pending.append(req)
         return req.id
     }
@@ -85,6 +89,18 @@ extension IslandModel {
         let sid = pending[idx].sessionID
         pending.remove(at: idx)
         markResolved(sessionID: sid)
+    }
+
+    /// Reveals held-back requests whose host app is no longer in front.
+    /// Returns true if any became visible.
+    @discardableResult
+    func revealDeferred(frontmostBundleID: String?) -> Bool {
+        var revealed = false
+        for i in pending.indices where pending[i].deferred && pending[i].hostBundleID != frontmostBundleID {
+            pending[i].deferred = false
+            revealed = true
+        }
+        return revealed
     }
 
     func markResolved(sessionID: UUID) {

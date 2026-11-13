@@ -15,17 +15,21 @@ final class IslandController {
     private var openedByAttention = false
     private(set) var isVisible = true
     private var server: HookServer?
+    private let focuser = SessionFocuser()
 
     private var defaults: UserDefaults { .standard }
     private var hoverOpen: Bool { defaults.object(forKey: Pref.hoverOpen) as? Bool ?? true }
     private var hoverDelay: Double { defaults.object(forKey: Pref.hoverDelay) as? Double ?? 0.25 }
     private var autoOpen: Bool { defaults.object(forKey: Pref.autoOpenOnAttention) as? Bool ?? true }
+    private var holdWhenFocused: Bool { defaults.object(forKey: Pref.holdWhenFocused) as? Bool ?? true }
     private var autoCollapse: Double { defaults.object(forKey: Pref.autoCollapseSeconds) as? Double ?? 12 }
 
     func start() {
         let panel = IslandPanel()
         let host = IslandHostingView(rootView: IslandView(model: model, onResolve: { [weak self] approve in
             self?.resolve(approve: approve)
+        }, onJump: { [weak self] session in
+            self?.jump(to: session)
         }))
         host.sizingOptions = []
         host.activeRect = { [weak self] in
@@ -42,6 +46,14 @@ final class IslandController {
             MainActor.assumeIsolated { self?.reposition() }
         }
         startServer()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated {
+                guard let self, self.model.revealDeferred(frontmostBundleID: app?.bundleIdentifier) else { return }
+                self.attentionArrived()
+            }
+        }
         let handler: (NSEvent) -> Void = { [weak self] _ in
             MainActor.assumeIsolated { self?.mouseMoved() }
         }
@@ -71,7 +83,13 @@ final class IslandController {
     func handleHook(_ data: Data, _ conn: HookConnection) {
         guard let event = HookEvent.decode(data) else { conn.reply(Data()); return }
         if event.eventName == "PermissionRequest" {
-            let id = model.addPermission(event) { approve in
+            let host = focuser.hostApp(for: event.triage)
+            let hostID = host?.bundleIdentifier
+            let hold = holdWhenFocused && hostID != nil
+                && hostID == NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            TriageLog.write("PermissionRequest session=\(event.sessionID ?? "?") tool=\(event.toolName ?? "?") host=\(hostID ?? "none") frontmost=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none") hold=\(hold)")
+            let id = model.addPermission(event, hostBundleID: hostID, hostName: host?.localizedName, deferred: hold) { approve in
+                TriageLog.write("decision approve=\(approve) session=\(event.sessionID ?? "?")")
                 conn.reply(HookDecision.permissionResponse(allow: approve,
                                                            message: approve ? nil : "Denied from Triage"))
             }
@@ -79,12 +97,14 @@ final class IslandController {
             conn.setOnClose { [weak self] in
                 Task { @MainActor in
                     guard let self else { return }
+                    TriageLog.write("peer closed (answered elsewhere or hook killed) session=\(event.sessionID ?? "?")")
                     self.model.cancelPermission(id)
                     if self.model.pending.isEmpty, self.openedByAttention { self.scheduleCollapse(after: 0.6) }
                 }
             }
-            attentionArrived()
+            if !hold { attentionArrived() }
         } else {
+            TriageLog.write("\(event.eventName) session=\(event.sessionID ?? "?")")
             model.apply(event)
             conn.reply(Data())
         }
@@ -113,6 +133,13 @@ final class IslandController {
         model.resolve(approve: approve)
         openedByAttention = false
         scheduleCollapse(after: 0.6)
+    }
+
+    /// Brings the session's terminal forward and tucks the island away.
+    func jump(to session: Session) {
+        focuser.focus(session)
+        openedByAttention = false
+        scheduleCollapse(after: 0.15)
     }
 
     func simulateAttention() {

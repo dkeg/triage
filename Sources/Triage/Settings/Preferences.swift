@@ -5,4 +5,5 @@ enum Pref {
     static let hoverDelay = "hoverDelay"
     static let autoOpenOnAttention = "autoOpenOnAttention"
     static let autoCollapseSeconds = "autoCollapseSeconds"
+    static let holdWhenFocused = "holdWhenFocused"
 }

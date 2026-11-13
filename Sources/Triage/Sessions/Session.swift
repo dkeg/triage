@@ -1,4 +1,5 @@
 import SwiftUI
+import TriageCore
 
 enum SessionSource: String, CaseIterable, Identifiable {
     case claudeCode, supacode, terminal, otherAgent
@@ -50,11 +51,16 @@ struct Session: Identifiable, Equatable {
     var state: SessionState
     var detail: String
     var lastActivity: Date
+    /// Working directory and terminal context, used to jump back to the session.
+    var cwd: String?
+    var meta: TriageMeta?
 
     init(id: UUID = UUID(), externalID: String? = nil, name: String, source: SessionSource,
-         state: SessionState, detail: String, lastActivity: Date = Date()) {
+         state: SessionState, detail: String, lastActivity: Date = Date(),
+         cwd: String? = nil, meta: TriageMeta? = nil) {
         self.id = id; self.externalID = externalID; self.name = name; self.source = source
         self.state = state; self.detail = detail; self.lastActivity = lastActivity
+        self.cwd = cwd; self.meta = meta
     }
 }
 
@@ -65,6 +71,12 @@ struct AttentionRequest: Identifiable, Equatable {
     var title: String
     var detail: String
     var decide: (Bool) -> Void
+    /// Bundle id of the app the request came from (terminal / Subspace / ...).
+    var hostBundleID: String? = nil
+    var hostName: String? = nil
+    /// The host app is in front, so its own prompt is visible: don't auto-open the island.
+    /// The request can still be answered from the island.
+    var deferred = false
 
     static func == (a: Self, b: Self) -> Bool { a.id == b.id }
 }

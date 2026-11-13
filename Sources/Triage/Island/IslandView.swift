@@ -3,6 +3,7 @@ import SwiftUI
 struct IslandView: View {
     @Bindable var model: IslandModel
     var onResolve: (Bool) -> Void = { _ in }
+    var onJump: (Session) -> Void = { _ in }
 
     var body: some View {
         let size = model.size
@@ -17,7 +18,7 @@ struct IslandView: View {
         .frame(width: size.width, height: size.height)
         .clipShape(shape)
         // Thin rim, like the system island shows when a Live Activity is active.
-        .overlay(shape.strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5))
+        .overlay(shape.strokeBorder(rim, lineWidth: 1.5))
         .shadow(color: .black.opacity(size == .zero ? 0 : 0.35), radius: 10, y: 4)
         .opacity(size == .zero ? 0 : 1)
         .padding(.top, IslandModel.topInset)
@@ -29,11 +30,28 @@ struct IslandView: View {
         .preferredColorScheme(.dark)
     }
 
+    /// Collapsed: the rim is transparent beside the hardware island (no seam where the two
+    /// meet) and becomes opaque toward the outer ends, so it reads like the island's own rim
+    /// wrapping around a Live Activity. Expanded: uniform rim.
+    private var rim: AnyShapeStyle {
+        if model.mode == .collapsed {
+            return AnyShapeStyle(LinearGradient(
+                stops: [.init(color: .white.opacity(0.26), location: 0),
+                        .init(color: .white.opacity(0.18), location: 0.2),
+                        .init(color: .white.opacity(0), location: 0.4),
+                        .init(color: .white.opacity(0), location: 0.6),
+                        .init(color: .white.opacity(0.18), location: 0.8),
+                        .init(color: .white.opacity(0.26), location: 1)],
+                startPoint: .leading, endPoint: .trailing))
+        }
+        return AnyShapeStyle(Color.white.opacity(0.2))
+    }
+
     @ViewBuilder private var content: some View {
         switch model.mode {
         case .collapsed: CollapsedContent(model: model)
         case .peek: PeekContent(model: model)
-        case .expanded: ExpandedContent(model: model, onResolve: onResolve)
+        case .expanded: ExpandedContent(model: model, onResolve: onResolve, onJump: onJump)
         }
     }
 }
@@ -91,6 +109,7 @@ private struct PeekContent: View {
 private struct ExpandedContent: View {
     @Bindable var model: IslandModel
     let onResolve: (Bool) -> Void
+    let onJump: (Session) -> Void
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -113,7 +132,7 @@ private struct ExpandedContent: View {
             }
 
             ForEach(model.sessions.prefix(5)) { s in
-                SessionRow(session: s)
+                SessionRow(session: s) { onJump(s) }
             }
             Spacer(minLength: 0)
         }
@@ -128,6 +147,10 @@ private struct AttentionCard: View {
     let deny: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if request.deferred {
+                Text("\(request.hostName ?? "The agent's app") is in front — answer there, or here.")
+                    .font(.system(size: 10, weight: .medium)).foregroundStyle(.orange.opacity(0.8))
+            }
             Text(request.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             Text(request.title)
                 .font(.system(size: 12, design: .monospaced))
@@ -151,22 +174,37 @@ private struct AttentionCard: View {
 
 private struct SessionRow: View {
     let session: Session
+    let action: () -> Void
+    @State private var hovering = false
+
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: session.source.symbol)
-                .frame(width: 22)
-                .foregroundStyle(.white.opacity(0.7))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.name).font(.system(size: 12, weight: .medium)).foregroundStyle(.white)
-                Text(session.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: session.source.symbol)
+                    .frame(width: 22)
+                    .foregroundStyle(.white.opacity(0.7))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.name).font(.system(size: 12, weight: .medium)).foregroundStyle(.white)
+                    Text(session.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                }
+                Spacer()
+                if hovering {
+                    Image(systemName: "arrow.up.forward.app").foregroundStyle(.white.opacity(0.6))
+                } else {
+                    HStack(spacing: 6) {
+                        Circle().fill(session.state.color).frame(width: 6, height: 6)
+                        Text(session.state.label).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+                    }
+                }
             }
-            Spacer()
-            HStack(spacing: 6) {
-                Circle().fill(session.state.color).frame(width: 6, height: 6)
-                Text(session.state.label).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
-            }
+            .padding(.horizontal, 22)
+            .frame(height: 52)
+            .contentShape(Rectangle())
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.white.opacity(hovering ? 0.07 : 0)).padding(.horizontal, 10))
         }
-        .padding(.horizontal, 22)
-        .frame(height: 52)
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Jump to this session")
     }
 }

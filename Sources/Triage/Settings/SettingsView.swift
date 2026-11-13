@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(Pref.hoverDelay) private var hoverDelay = 0.25
     @AppStorage(Pref.autoOpenOnAttention) private var autoOpen = true
     @AppStorage(Pref.autoCollapseSeconds) private var autoCollapse = 12.0
+    @AppStorage(Pref.holdWhenFocused) private var holdWhenFocused = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
     @State private var hookError: String?
@@ -20,6 +21,9 @@ struct SettingsView: View {
                     Text(String(format: "%.2fs", hoverDelay)).monospacedDigit().frame(width: 48)
                 }.disabled(!hoverOpen)
                 Toggle("Auto-open when a session needs me", isOn: $autoOpen)
+                Toggle("Hold approvals while the agent's app is in front", isOn: $holdWhenFocused)
+                Text("If you're already looking at the app running the session, answer in its own prompt. The request moves to the island when you switch away.")
+                    .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Auto-close after") {
                     Slider(value: $autoCollapse, in: 3...60, step: 1) { Text("") }.frame(width: 160)
                     Text("\(Int(autoCollapse))s").monospacedDigit().frame(width: 48)
@@ -47,7 +51,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { hooksInstalled = HookInstaller.isInstalled() }
-        .frame(width: 460, height: 460)
+        .frame(width: 460, height: 520)
     }
 
     private func install() {

@@ -74,4 +74,36 @@ final class SessionStoreTests: XCTestCase {
         m.apply(event("SessionEnd"))
         XCTAssertTrue(m.pending.isEmpty)
     }
+
+    func testDeferredRequestStaysAnswerableAndRevealsWhenHostLeavesFront() {
+        let m = IslandModel()
+        var answered: Bool?
+        m.addPermission(event("PermissionRequest", #","tool_name":"Bash""#), hostBundleID: "com.x.term", deferred: true) { answered = $0 }
+        XCTAssertEqual(m.attention?.deferred, true)     // present (answerable from the island) but not auto-opened
+        XCTAssertFalse(m.revealDeferred(frontmostBundleID: "com.x.term"))
+        XCTAssertEqual(m.attention?.deferred, true)
+        XCTAssertTrue(m.revealDeferred(frontmostBundleID: "com.apple.Safari"))   // host left the front -> auto-open
+        XCTAssertEqual(m.attention?.deferred, false)
+        m.resolve(approve: true)
+        XCTAssertEqual(answered, true)
+    }
+
+    func testDeferredRequestCanBeApprovedWhileHeld() {
+        let m = IslandModel()
+        var answered: Bool?
+        m.addPermission(event("PermissionRequest", #","tool_name":"Bash""#), hostBundleID: "h", deferred: true) { answered = $0 }
+        m.resolve(approve: true)
+        XCTAssertEqual(answered, true)
+        XCTAssertTrue(m.pending.isEmpty)
+    }
+
+    func testExpandedIsWiderThanCollapsed() {
+        let m = IslandModel()
+        m.geometry = IslandGeometry(cutout: CGRect(x: 838.5, y: 1093, width: 59, height: 40),
+                                    screenFrame: CGRect(x: 0, y: 0, width: 1736, height: 1133), isPhysical: true)
+        m.sessions = IslandModel.mockSessions()
+        m.mode = .expanded
+        XCTAssertEqual(m.size.width, IslandModel.expandedWidth)
+        XCTAssertLessThanOrEqual(IslandModel.expandedWidth, IslandGeometry.canvas.width)
+    }
 }

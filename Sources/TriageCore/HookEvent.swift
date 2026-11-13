@@ -4,6 +4,14 @@ import Foundation
 public struct TriageMeta: Decodable, Equatable, Sendable {
     public var ppid: Int?
     public var env: [String: String]?
+    /// Ancestor processes of the hook, nearest first (used to find the host terminal/app).
+    public var chain: [ProcRef]?
+    /// Controlling tty of the agent's terminal, when it has one.
+    public var tty: String?
+
+    public init(ppid: Int? = nil, env: [String: String]? = nil, chain: [ProcRef]? = nil, tty: String? = nil) {
+        self.ppid = ppid; self.env = env; self.chain = chain; self.tty = tty
+    }
 }
 
 /// A Claude Code hook payload (the union of fields we care about across events).

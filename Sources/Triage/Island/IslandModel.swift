@@ -21,6 +21,7 @@ final class IslandModel {
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let centerReserve: CGFloat = 150
     static let wing: CGFloat = 80
+    static let expandedWidth: CGFloat = 620
 
     /// Height of the band that lines up with the hardware island.
     var bandHeight: CGFloat { max(geometry.cutout.height - Self.topInset + 2, 30) }
@@ -37,7 +38,8 @@ final class IslandModel {
         case .expanded:
             let rows = min(sessions.count, 5)
             let body = 44 + CGFloat(rows) * 52 + 8
-            return CGSize(width: 500, height: band + body + (attention == nil ? 0 : 118))
+            let card: CGFloat = attention == nil ? 0 : (attention?.deferred == true ? 138 : 118)
+            return CGSize(width: Self.expandedWidth, height: band + body + card)
         }
     }
 
