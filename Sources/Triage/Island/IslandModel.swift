@@ -4,32 +4,6 @@ import TriageCore
 
 enum IslandMode: Equatable { case collapsed, peek, expanded }
 
-/// How the collapsed pill's edge and fill are drawn.
-enum RimStyle: String, CaseIterable, Identifiable {
-    /// Two separate floating pills either side of the hardware island (clear in the middle),
-    /// like a Live Activity.
-    case wingsOnly
-    /// Rim bright at the outer ends, fading to transparent beside the hardware island.
-    case outwardFade
-    /// Rim bright beside the hardware island, fading toward the outer ends.
-    case inwardFade
-    /// Thin rim; the fill goes from semi-transparent inside to solid black at the outer ends.
-    case fillFade
-    case uniform
-    case none
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .wingsOnly: "Wing pills"
-        case .outwardFade: "Outer glow"
-        case .inwardFade: "Inner glow"
-        case .fillFade: "Fill fade"
-        case .uniform: "Uniform"
-        case .none: "None"
-        }
-    }
-}
-
 /// How wide the collapsed pill is.
 enum PillWidthMode: String, CaseIterable, Identifiable {
     /// Hugs the hardware island.
@@ -73,9 +47,7 @@ final class IslandModel {
     static let topInset: CGFloat = 6
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let wideReserve: CGFloat = 150
-    static let wing: CGFloat = 80
-    /// The right-hand pill sits this much closer to the hardware island than the left one.
-    static let rightPillPull: CGFloat = 4
+    static let wing: CGFloat = 96
     static let expandedWidth: CGFloat = 620
 
     /// Width kept clear in the middle for the system island.
@@ -90,13 +62,13 @@ final class IslandModel {
         }
     }
 
-    /// Whether a screen point should count as hovering Triage. While collapsed, the middle of
-    /// the pill is the hardware/system island, which must not trigger anything: only Triage's
-    /// own wings count.
+    /// Whether a screen point should count as hovering triage. While collapsed, only the status
+    /// pill on the left of the hardware island counts: not the island itself, not the clear
+    /// space on its other side.
     func hoverHit(_ point: CGPoint, in rect: CGRect, slack: CGFloat = 0) -> Bool {
         guard rect.insetBy(dx: -slack, dy: -slack).contains(point) else { return false }
         guard mode == .collapsed else { return true }
-        return abs(point.x - geometry.cutout.midX) >= centerReserve / 2
+        return point.x <= geometry.cutout.midX - centerReserve / 2
     }
 
     /// Height of the band that lines up with the hardware island.

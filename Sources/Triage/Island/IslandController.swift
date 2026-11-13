@@ -277,10 +277,8 @@ final class IslandController {
         let r = currentRect, f = panel.frame
         func rel(_ x: CGRect) -> CGRect { CGRect(x: x.minX - f.minX, y: x.minY - f.minY, width: x.width, height: x.height) }
         guard model.mode == .collapsed else { return [rel(r)] }
-        let half = model.centerReserve / 2
-        let wing = r.width / 2 - half
-        return [rel(CGRect(x: r.minX, y: r.minY, width: wing, height: r.height)),
-                rel(CGRect(x: r.midX + half - IslandModel.rightPillPull, y: r.minY, width: wing, height: r.height))]
+        let pill = r.width / 2 - model.centerReserve / 2
+        return [rel(CGRect(x: r.minX, y: r.minY, width: pill, height: r.height))]
     }
 
     private func mouseMoved() {

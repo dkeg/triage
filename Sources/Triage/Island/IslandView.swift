@@ -3,8 +3,6 @@ import TriageCore
 
 struct IslandView: View {
     @Bindable var model: IslandModel
-    @AppStorage(Pref.rimStyle) private var rimStyleRaw = RimStyle.wingsOnly.rawValue
-    private var rimStyle: RimStyle { RimStyle(rawValue: rimStyleRaw) ?? .wingsOnly }
     var onResolve: (Bool) -> Void = { _ in }
     var onSkip: () -> Void = {}
     var onAlways: () -> Void = {}
@@ -15,23 +13,23 @@ struct IslandView: View {
         let size = model.size
         let shape = RoundedRectangle(cornerRadius: model.cornerRadius, style: .continuous)
         Group {
-            if isWingPills {
-                // Two separate floating pills either side of the hardware island.
-                WingPills(model: model, onOpen: onOpen)
-                    .frame(width: size.width, height: size.height)
+            if model.mode == .collapsed {
+                // One status pill beside the hardware island; the rest of the frame is clear.
+                StatusPill(model: model, onOpen: onOpen)
+                    .frame(width: size.width, height: size.height, alignment: .leading)
             } else {
-            ZStack(alignment: .top) {
-                shape.fill(fill)
-                content
-                    .id(model.mode)
-                    .transition(.opacity)
-                    .padding(.top, model.mode == .collapsed ? 0 : model.bandHeight)
-            }
-            .frame(width: size.width, height: size.height)
-            .clipShape(shape)
-            // Thin rim, like the system island shows when a Live Activity is active.
-            .overlay(shape.strokeBorder(rim, lineWidth: 1.5))
-            .shadow(color: .black.opacity(size == .zero ? 0 : 0.35), radius: 10, y: 4)
+                ZStack(alignment: .top) {
+                    shape.fill(Color.black)
+                    content
+                        .id(model.mode)
+                        .transition(.opacity)
+                        .padding(.top, model.bandHeight)
+                }
+                .frame(width: size.width, height: size.height)
+                .clipShape(shape)
+                // Thin rim, like the system island shows when a Live Activity is active.
+                .overlay(shape.strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5))
+                .shadow(color: .black.opacity(size == .zero ? 0 : 0.35), radius: 10, y: 4)
             }
         }
         .opacity(size == .zero ? 0 : 1)
@@ -45,120 +43,28 @@ struct IslandView: View {
         .preferredColorScheme(.dark)
     }
 
-    private var isWingPills: Bool { model.mode == .collapsed && rimStyle == .wingsOnly }
-
-    private var wingFraction: CGFloat {
-        guard model.size.width > 0 else { return 0.25 }
-        return min(IslandModel.wing / model.size.width, 0.45)
-    }
-
-    private func horizontal(_ stops: [(Double, CGFloat)]) -> AnyShapeStyle {
-        AnyShapeStyle(LinearGradient(stops: stops.map { .init(color: .white.opacity($0.0), location: $0.1) },
-                                     startPoint: .leading, endPoint: .trailing))
-    }
-
-    /// How far the wings tuck under the system island so no wallpaper shows between them.
-    private var tuckFraction: CGFloat {
-        model.size.width > 0 ? 6 / model.size.width : 0
-    }
-
-    /// Fill: solid black, except while collapsed in "Wings only" (clear behind the hardware
-    /// island) or "Fill fade" (transparent inside to opaque outside).
-    private var fill: AnyShapeStyle {
-        guard model.mode == .collapsed else { return AnyShapeStyle(Color.black) }
-        let w = wingFraction
-        if rimStyle == .wingsOnly {
-            let edge = w + tuckFraction
-            return AnyShapeStyle(LinearGradient(
-                stops: [.init(color: .black, location: 0),
-                        .init(color: .black, location: edge),
-                        .init(color: .clear, location: edge + 0.004),
-                        .init(color: .clear, location: 1 - edge - 0.004),
-                        .init(color: .black, location: 1 - edge),
-                        .init(color: .black, location: 1)],
-                startPoint: .leading, endPoint: .trailing))
-        }
-        guard rimStyle == .fillFade else { return AnyShapeStyle(Color.black) }
-        return AnyShapeStyle(LinearGradient(
-            stops: [.init(color: .black, location: 0),
-                    .init(color: .black.opacity(0.55), location: w),
-                    .init(color: .black.opacity(0.55), location: 1 - w),
-                    .init(color: .black, location: 1)],
-            startPoint: .leading, endPoint: .trailing))
-    }
-
-    /// Collapsed rim per the chosen style. Expanded always gets a plain uniform rim.
-    private var rim: AnyShapeStyle {
-        let plain = AnyShapeStyle(Color.white.opacity(0.2))
-        guard model.mode == .collapsed, model.size.width > 0 else { return plain }
-        let w = wingFraction
-        switch rimStyle {
-        case .wingsOnly:
-            let edge = w + tuckFraction
-            return horizontal([(0.5, 0), (0.32, w * 0.55), (0.0, edge), (0.0, 1 - edge), (0.32, 1 - w * 0.55), (0.5, 1)])
-        case .uniform: return plain
-        case .none: return AnyShapeStyle(Color.clear)
-        case .outwardFade:
-            return horizontal([(0.55, 0), (0.28, w * 0.5), (0, w), (0, 1 - w), (0.28, 1 - w * 0.5), (0.55, 1)])
-        case .inwardFade:
-            return horizontal([(0, 0), (0.18, w * 0.5), (0.5, w), (0.5, 1 - w), (0.18, 1 - w * 0.5), (0, 1)])
-        case .fillFade:
-            return horizontal([(0.3, 0), (0.15, w), (0.15, 1 - w), (0.3, 1)])
-        }
-    }
-
     @ViewBuilder private var content: some View {
         switch model.mode {
-        case .collapsed: CollapsedContent(model: model)
+        case .collapsed: EmptyView()
         case .peek: PeekContent(model: model)
         case .expanded: ExpandedContent(model: model, onResolve: onResolve, onSkip: onSkip, onAlways: onAlways, onJump: onJump)
         }
     }
 }
 
-/// Orange and pulsing when something is blocked on you, green otherwise.
-private struct StatusDot: View {
-    let model: IslandModel
+/// A status dot; pulses when something is blocked on you.
+private struct PulsingDot: View {
+    let color: Color
+    let pulsing: Bool
     @State private var dim = false
-
-    private var color: Color { model.pending.count > 0 ? .red : model.needsInputCount > 0 ? .orange : .green }
 
     var body: some View {
         Circle().fill(color).frame(width: 7, height: 7)
-            .opacity(model.needsInputCount > 0 && dim ? 0.3 : 1)
+            .opacity(pulsing && dim ? 0.3 : 1)
             .onAppear {
+                guard pulsing else { return }
                 withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { dim = true }
             }
-    }
-}
-
-/// "2 waiting" / "All clear"
-@MainActor private func waitingText(_ model: IslandModel) -> String {
-    if model.pending.count > 0 { return "\(model.pending.count) pending" }
-    return model.waitingCount > 0 ? "\(model.waitingCount) waiting" : "All clear"
-}
-
-private struct CollapsedContent: View {
-    let model: IslandModel
-    var body: some View {
-                let working = model.sessions.filter { $0.state == .running }.count
-        HStack(spacing: 0) {
-            HStack(spacing: 7) {
-                StatusDot(model: model)
-                Text(waitingText(model))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(model.pending.count > 0 ? Color.red : model.needsInputCount > 0 ? Color.orange : .white.opacity(0.9))
-                    .lineLimit(1)
-            }
-            .frame(width: IslandModel.wing, alignment: .center)
-            Spacer(minLength: 0).frame(width: model.centerReserve)
-            Text("\(working) working")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.6))
-                .lineLimit(1)
-                .frame(width: IslandModel.wing, alignment: .center)
-        }
-        .frame(maxHeight: .infinity)
     }
 }
 
@@ -166,7 +72,8 @@ private struct PeekContent: View {
     let model: IslandModel
     var body: some View {
         HStack(spacing: 8) {
-            StatusDot(model: model)
+            PulsingDot(color: model.pending.count > 0 ? .red : model.needsInputCount > 0 ? .orange : .green,
+                       pulsing: model.needsInputCount > 0)
             Text(model.waitingCount > 0
                  ? "\(model.waitingCount) waiting on you"
                  : "\(model.sessions.count) sessions running")
@@ -371,37 +278,74 @@ private struct HostIcon: View {
     }
 }
 
-/// Collapsed "Wing pills": each side is its own fully rounded pill with the same thin rim as
-/// the system island; the middle is left clear for the hardware island.
-private struct WingPills: View {
+/// The collapsed pill: a single status pill to the left of the hardware island. It rotates
+/// between "All clear" and "N working"; anything that needs you (pending approval, waiting
+/// question) takes it over and stays put.
+private struct StatusPill: View {
     let model: IslandModel
     let onOpen: () -> Void
 
     var body: some View {
-                let working = model.sessions.filter { $0.state == .running }.count
         HStack(spacing: 0) {
-            pill(flashing: model.pending.count > 0) {
-                HStack(spacing: 7) {
-                    StatusDot(model: model)
-                    Text(waitingText(model))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(model.pending.count > 0 ? Color.red : model.needsInputCount > 0 ? Color.orange : .white.opacity(0.9))
-                        .lineLimit(1)
-                }
-            }
+            FlashingPill(width: IslandModel.wing, height: model.bandHeight,
+                         flashing: model.pending.count > 0, onOpen: onOpen,
+                         content: StatusRotator(model: model))
             Spacer(minLength: 0).frame(width: model.centerReserve)
-            pill(flashing: false) {
-                Text("\(working) working")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(1)
+            Color.clear.frame(width: IslandModel.wing, height: 1)   // keeps the island centered
+        }
+    }
+}
+
+/// What the pill says. Urgent states are fixed; the idle ones alternate every few seconds.
+private struct StatusRotator: View {
+    let model: IslandModel
+    private let interval: TimeInterval = 3.5
+
+    private struct Line {
+        let text: String
+        let color: Color
+        let dot: Color
+        var pulsing = false
+    }
+
+    private var lines: [Line] {
+        let pending = model.pending.count
+        if pending > 0 { return [Line(text: "\(pending) pending", color: .red, dot: .red, pulsing: true)] }
+        if model.needsInputCount > 0 {
+            return [Line(text: "\(model.needsInputCount) waiting", color: .orange, dot: .orange, pulsing: true)]
+        }
+        let clear = Line(text: "All clear", color: .white.opacity(0.9), dot: .green)
+        let working = model.sessions.filter { $0.state == .running }.count
+        return working > 0 ? [clear, Line(text: "\(working) working", color: .white.opacity(0.75), dot: .green)] : [clear]
+    }
+
+    var body: some View {
+        let lines = self.lines
+        if lines.count == 1 {
+            row(lines[0])
+        } else {
+            TimelineView(.periodic(from: .now, by: interval)) { ctx in
+                let i = Int(ctx.date.timeIntervalSinceReferenceDate / interval) % lines.count
+                ZStack {
+                    row(lines[i])
+                        .id(i)
+                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
+                                                removal: .move(edge: .top).combined(with: .opacity)))
+                }
+                .animation(.easeInOut(duration: 0.45), value: i)
             }
-            .offset(x: -IslandModel.rightPillPull)
+            .clipped()
         }
     }
 
-    private func pill<C: View>(flashing: Bool, @ViewBuilder _ content: () -> C) -> some View {
-        FlashingPill(width: IslandModel.wing, height: model.bandHeight, flashing: flashing, onOpen: onOpen, content: content())
+    private func row(_ l: Line) -> some View {
+        HStack(spacing: 7) {
+            PulsingDot(color: l.dot, pulsing: l.pulsing)
+            Text(l.text)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(l.color)
+                .lineLimit(1)
+        }
     }
 }
 

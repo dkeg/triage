@@ -10,7 +10,6 @@ struct SettingsView: View {
     @AppStorage(Pref.autoCollapseSeconds) private var autoCollapse = 5.0
     @AppStorage(Pref.holdWhenFocused) private var holdWhenFocused = true
     @AppStorage(Pref.pillWidth) private var pillWidth = PillWidthMode.wide.rawValue
-    @AppStorage(Pref.rimStyle) private var rimStyle = RimStyle.wingsOnly.rawValue
     @State private var screenAccess = SystemIslandProbe.hasPermission
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
@@ -42,9 +41,6 @@ struct SettingsView: View {
             Section("Appearance") {
                 Picker("Collapsed width", selection: $pillWidth) {
                     ForEach(PillWidthMode.allCases) { Text($0.label).tag($0.rawValue) }
-                }
-                Picker("Pill edge", selection: $rimStyle) {
-                    ForEach(RimStyle.allCases) { Text($0.label).tag($0.rawValue) }
                 }
                 Group {
                     switch PillWidthMode(rawValue: pillWidth) ?? .wide {
