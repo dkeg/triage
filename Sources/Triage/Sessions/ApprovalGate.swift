@@ -6,7 +6,7 @@ enum ApprovalGate {
     /// decision" as a denial, so Triage must never answer with nothing for those.
     static let nativePromptHosts: Set<String> = [
         "com.apple.Terminal", "com.googlecode.iterm2", "com.mitchellh.ghostty",
-        "dev.warp.Warp-Stable", "net.kovidgoyal.kitty", "org.alacritty", "com.github.wez.wezterm",
+        "dev.warp.Warp-Stable", "fun.tw93.kaku", "net.kovidgoyal.kitty", "org.alacritty", "com.github.wez.wezterm",
     ]
 
     static func canHandBack(hostBundleID: String?) -> Bool {

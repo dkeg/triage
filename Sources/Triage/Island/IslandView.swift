@@ -150,7 +150,10 @@ private struct AttentionCard: View {
     let skip: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(request.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+            HStack(spacing: 6) {
+                HostIcon(bundleID: request.hostBundleID, fallback: nil, size: 14)
+                Text(request.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+            }
             Text(request.title)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.white)
@@ -183,9 +186,7 @@ private struct SessionRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: session.source.symbol)
-                    .frame(width: 22)
-                    .foregroundStyle(.white.opacity(0.7))
+                HostIcon(bundleID: session.hostBundleID, fallback: session.source.symbol, size: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.name).font(.system(size: 12, weight: .medium)).foregroundStyle(.white)
                     Text(session.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
@@ -209,5 +210,21 @@ private struct SessionRow: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("Jump to this session")
+    }
+}
+
+/// The icon of the app hosting a session; an SF Symbol when the app is unknown.
+private struct HostIcon: View {
+    let bundleID: String?
+    let fallback: String?
+    let size: CGFloat
+    var body: some View {
+        if let img = HostApp.icon(for: bundleID) {
+            Image(nsImage: img).resizable().interpolation(.high)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+        } else if let fallback {
+            Image(systemName: fallback).frame(width: size).foregroundStyle(.white.opacity(0.7))
+        }
     }
 }

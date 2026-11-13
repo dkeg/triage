@@ -21,12 +21,15 @@ extension IslandModel {
         if let i = sessions.firstIndex(where: { $0.externalID == ext }) {
             if let t = e.sessionTitle, !t.isEmpty { sessions[i].name = t }
             if let c = e.cwd { sessions[i].cwd = c }
-            if let m = e.triage { sessions[i].meta = m }
+            if let m = e.triage {
+                sessions[i].meta = m
+                if let h = HostApp.bundleID(for: m) { sessions[i].hostBundleID = h }
+            }
             return i
         }
         let name = e.sessionTitle ?? e.folderName ?? "Claude Code"
         sessions.append(Session(externalID: ext, name: name, source: .claudeCode, state: .idle, detail: "",
-                                cwd: e.cwd, meta: e.triage))
+                                cwd: e.cwd, meta: e.triage, hostBundleID: HostApp.bundleID(for: e.triage)))
         return sessions.count - 1
     }
 
@@ -36,7 +39,8 @@ extension IslandModel {
         for a in agents where !sessions.contains(where: { $0.agentPID == a.pid }) {
             let name = a.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Claude Code"
             sessions.append(Session(name: name, source: .claudeCode, state: .idle, detail: "Running",
-                                    cwd: a.cwd, meta: TriageMeta(chain: a.chain, tty: a.tty)))
+                                    cwd: a.cwd, meta: TriageMeta(chain: a.chain, tty: a.tty),
+                                    hostBundleID: HostApp.bundleID(for: TriageMeta(chain: a.chain, tty: a.tty))))
         }
     }
 
@@ -101,7 +105,7 @@ extension IslandModel {
         let req = AttentionRequest(id: UUID(), sessionID: session.id,
                                    title: e.toolSummary ?? e.toolName ?? "Permission request",
                                    detail: "\(session.name) wants to use \(e.toolName ?? "a tool")",
-                                   decide: decide, canHandBack: canHandBack, release: release)
+                                   decide: decide, canHandBack: canHandBack, hostBundleID: session.hostBundleID, release: release)
         pending.append(req)
         return req.id
     }

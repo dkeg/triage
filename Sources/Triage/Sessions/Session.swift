@@ -54,16 +54,18 @@ struct Session: Identifiable, Equatable {
     /// Working directory and terminal context, used to jump back to the session.
     var cwd: String?
     var meta: TriageMeta?
+    /// Bundle id of the app hosting this session, for its icon.
+    var hostBundleID: String?
 
     /// The agent process (Claude Code) this session belongs to, from the hook's ancestor chain.
     var agentPID: Int? { meta?.chain?.first(where: { $0.name == "claude" })?.pid }
 
     init(id: UUID = UUID(), externalID: String? = nil, name: String, source: SessionSource,
          state: SessionState, detail: String, lastActivity: Date = Date(),
-         cwd: String? = nil, meta: TriageMeta? = nil) {
+         cwd: String? = nil, meta: TriageMeta? = nil, hostBundleID: String? = nil) {
         self.id = id; self.externalID = externalID; self.name = name; self.source = source
         self.state = state; self.detail = detail; self.lastActivity = lastActivity
-        self.cwd = cwd; self.meta = meta
+        self.cwd = cwd; self.meta = meta; self.hostBundleID = hostBundleID
     }
 }
 
@@ -77,6 +79,7 @@ struct AttentionRequest: Identifiable, Equatable {
     /// Hands the request back to the app's own prompt (replies with no decision). Only safe
     /// when the host shows a native prompt; elsewhere it can act as a denial.
     var canHandBack = false
+    var hostBundleID: String? = nil
     var release: () -> Void = {}
 
     static func == (a: Self, b: Self) -> Bool { a.id == b.id }

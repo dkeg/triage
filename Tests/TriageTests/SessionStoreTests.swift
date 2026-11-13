@@ -163,4 +163,17 @@ final class SessionStoreTests: XCTestCase {
         m.resolve(approve: true)
         XCTAssertTrue(m.sessions.isEmpty)
     }
+
+    func testHostAppFromTerminalEnvironment() {
+        let e = HookEvent.decode(Data(#"{"hook_event_name":"SessionStart","session_id":"k","cwd":"/a","_triage":{"chain":[],"env":{"__CFBundleIdentifier":"fun.tw93.kaku"}}}"#.utf8))!
+        let m = IslandModel()
+        m.apply(e)
+        XCTAssertEqual(m.sessions[0].hostBundleID, "fun.tw93.kaku")
+        var released = false
+        let id = m.addPermission(HookEvent.decode(Data(#"{"hook_event_name":"PermissionRequest","session_id":"k","tool_name":"Bash"}"#.utf8))!,
+                                 canHandBack: true, release: { released = true }) { _ in }!
+        XCTAssertEqual(m.pending.first?.hostBundleID, "fun.tw93.kaku")
+        XCTAssertTrue(ApprovalGate.canHandBack(hostBundleID: "fun.tw93.kaku"))
+        m.release(id: id); XCTAssertTrue(released)
+    }
 }
