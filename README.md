@@ -66,6 +66,10 @@ rule as Kaku but haven't been tried; please open an issue if one misbehaves.
 | Automation (Terminal.app, iTerm2) | Select the right tab when you jump to a session | Only for those two apps |
 | Screen Recording | **Auto** pill width measures a thin strip at the top of the screen to see how wide the system island is. Nothing is stored or sent. | Only if you choose Auto |
 
+If triage doesn't appear in System Settings → Privacy & Security → Screen Recording after you choose
+Auto, click **+** under that list and add `Triage.app` (Settings → Appearance has a **Show triage in
+Finder** button), then relaunch triage.
+
 ## Settings
 
 Open from the menu-bar icon: hover and open behavior, which side of the island the pill sits on,

@@ -72,14 +72,18 @@ struct SettingsView: View {
                         Text("Needs Screen Recording access").foregroundStyle(.orange)
                         Spacer()
                         Button("Grant…") {
-                            if !CGRequestScreenCaptureAccess() {
+                            SystemIslandProbe.registerForAccess(activate: true)
+                            if !SystemIslandProbe.hasPermission {
                                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
                             }
                             screenAccess = SystemIslandProbe.hasPermission
                         }
                     }
-                    Text("Until it's granted, Auto behaves like Wide. After granting, re-select Auto or relaunch triage.")
+                    Text("Until it's granted, Auto behaves like Wide. If macOS doesn't list triage, click + under the list and add it (or drag it in from Finder). Then relaunch triage.")
                         .font(.caption).foregroundStyle(.secondary)
+                    Button("Show triage in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+                    }
                 }
             }
             Section("Claude Code") {

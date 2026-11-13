@@ -65,11 +65,37 @@ final class SystemIslandProbe {
 
     static var hasPermission: Bool { CGPreflightScreenCaptureAccess() }
 
+    /// Asks for Screen Recording. On current macOS the system prompt (and the entry in
+    /// Privacy & Security > Screen Recording) only appears once the app actually tries to capture,
+    /// so the old CGRequestScreenCaptureAccess call alone isn't enough.
+    @MainActor
+    static func registerForAccess(activate: Bool = false) {
+        // Only come forward when the user asked (the Grant button), never at launch.
+        if activate { NSApp.activate(ignoringOtherApps: true) }
+        let granted = CGRequestScreenCaptureAccess()
+        TriageLog.write("screen recording: CGRequestScreenCaptureAccess -> \(granted)")
+        Task {
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                TriageLog.write("screen recording: capture attempt ok (\(content.displays.count) displays)")
+            } catch {
+                let e = error as NSError
+                TriageLog.write("screen recording: capture attempt failed domain=\(e.domain) code=\(e.code) \(e.localizedDescription)")
+            }
+        }
+    }
+
     func start() {
         guard task == nil else { return }
         if !Self.hasPermission {
             status = .needsPermission
-            _ = CGRequestScreenCaptureAccess()          // shows the system prompt once
+            // Ask once on our own; after that only the Grant button asks again, so a refusal
+            // (or a prompt that was missed) isn't repeated on every launch.
+            let key = "screenAccessRequested"
+            if !UserDefaults.standard.bool(forKey: key) {
+                UserDefaults.standard.set(true, forKey: key)
+                Self.registerForAccess()
+            }
             TriageLog.write("probe: waiting for Screen Recording permission")
         }
         task = Task { [weak self] in
