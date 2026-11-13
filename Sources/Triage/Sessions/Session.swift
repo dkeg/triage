@@ -43,18 +43,28 @@ enum SessionState: Equatable {
 
 struct Session: Identifiable, Equatable {
     let id: UUID
+    /// The agent's own session id (e.g. Claude Code's session_id), used to match hook events.
+    var externalID: String?
     var name: String
     var source: SessionSource
     var state: SessionState
     var detail: String
+    var lastActivity: Date
 
-    init(id: UUID = UUID(), name: String, source: SessionSource, state: SessionState, detail: String) {
-        self.id = id; self.name = name; self.source = source; self.state = state; self.detail = detail
+    init(id: UUID = UUID(), externalID: String? = nil, name: String, source: SessionSource,
+         state: SessionState, detail: String, lastActivity: Date = Date()) {
+        self.id = id; self.externalID = externalID; self.name = name; self.source = source
+        self.state = state; self.detail = detail; self.lastActivity = lastActivity
     }
 }
 
-struct AttentionRequest: Equatable {
+/// A permission prompt waiting on the user. `decide` answers the blocked hook.
+struct AttentionRequest: Identifiable, Equatable {
+    let id: UUID
     var sessionID: UUID
     var title: String
     var detail: String
+    var decide: (Bool) -> Void
+
+    static func == (a: Self, b: Self) -> Bool { a.id == b.id }
 }

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TriageCore
 
 @MainActor
 final class IslandController {
@@ -13,6 +14,7 @@ final class IslandController {
     private var collapseTask: Task<Void, Never>?
     private var openedByAttention = false
     private(set) var isVisible = true
+    private var server: HookServer?
 
     private var defaults: UserDefaults { .standard }
     private var hoverOpen: Bool { defaults.object(forKey: Pref.hoverOpen) as? Bool ?? true }
@@ -39,6 +41,7 @@ final class IslandController {
                                                object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.reposition() }
         }
+        startServer()
         let handler: (NSEvent) -> Void = { [weak self] _ in
             MainActor.assumeIsolated { self?.mouseMoved() }
         }
@@ -52,6 +55,38 @@ final class IslandController {
         if let g = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved, handler: handler) { monitors.append(g) }
         if let l = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved, handler: { e in handler(e); return e }) {
             monitors.append(l)
+        }
+    }
+
+    // MARK: Hook server
+
+    private func startServer() {
+        let server = HookServer { data, conn in
+            Task { @MainActor in IslandController.shared.handleHook(data, conn) }
+        }
+        do { try server.start(); self.server = server }
+        catch { NSLog("Triage: hook server failed to start: \(error.localizedDescription)") }
+    }
+
+    func handleHook(_ data: Data, _ conn: HookConnection) {
+        guard let event = HookEvent.decode(data) else { conn.reply(Data()); return }
+        if event.eventName == "PermissionRequest" {
+            let id = model.addPermission(event) { approve in
+                conn.reply(HookDecision.permissionResponse(allow: approve,
+                                                           message: approve ? nil : "Denied from Triage"))
+            }
+            guard let id else { conn.reply(Data()); return }
+            conn.setOnClose { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.model.cancelPermission(id)
+                    if self.model.pending.isEmpty, self.openedByAttention { self.scheduleCollapse(after: 0.6) }
+                }
+            }
+            attentionArrived()
+        } else {
+            model.apply(event)
+            conn.reply(Data())
         }
     }
 

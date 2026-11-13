@@ -10,6 +10,7 @@ APP="$ROOT/build/Triage.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/Triage"
+cp "$(dirname "$BIN")/triage-hook" "$APP/Contents/MacOS/triage-hook"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -26,5 +27,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 # Ad-hoc sign for local runs. Release builds use a Developer ID identity + notarization.
+codesign --force --sign "${SIGN_IDENTITY:--}" "$APP/Contents/MacOS/triage-hook"
 codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
 echo "Built $APP"

@@ -1,20 +1,23 @@
 import SwiftUI
 import Observation
+import TriageCore
 
 enum IslandMode: Equatable { case collapsed, peek, expanded }
 
 @MainActor @Observable
 final class IslandModel {
     var mode: IslandMode = .collapsed
-    var sessions: [Session] = IslandModel.mockSessions()
-    var attention: AttentionRequest?
+    var sessions: [Session] = []
+    /// Permission requests waiting on the user, oldest first.
+    var pending: [AttentionRequest] = []
+    var attention: AttentionRequest? { pending.first }
     var geometry: IslandGeometry = .init(cutout: .zero, screenFrame: .zero, isPhysical: false)
 
     var hasActivity: Bool { !sessions.isEmpty }
     var needsInputCount: Int { sessions.filter { $0.state == .needsInput }.count }
 
     /// The hardware island floats about this far below the top screen edge; we match it.
-    static let topInset: CGFloat = 3
+    static let topInset: CGFloat = 4
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let centerReserve: CGFloat = 150
     static let wing: CGFloat = 80
@@ -40,22 +43,22 @@ final class IslandModel {
 
     var cornerRadius: CGFloat { mode == .expanded ? 28 : bandHeight / 2 }
 
+    /// Answers the oldest pending request.
     func resolve(approve: Bool) {
-        guard let a = attention, let i = sessions.firstIndex(where: { $0.id == a.sessionID }) else {
-            attention = nil; return
-        }
-        sessions[i].state = approve ? .running : .idle
-        sessions[i].detail = approve ? "Approved — continuing" : "Denied"
-        attention = nil
+        guard !pending.isEmpty else { return }
+        let req = pending.removeFirst()
+        req.decide(approve)
+        markResolved(sessionID: req.sessionID)
     }
 
     func simulateAttention() {
-        guard let i = sessions.firstIndex(where: { $0.source == .claudeCode }) ?? sessions.indices.first else { return }
+        if sessions.isEmpty { sessions = Self.mockSessions() }
+        guard let s = sessions.first(where: { $0.source == .claudeCode }) ?? sessions.first,
+              let i = sessions.firstIndex(where: { $0.id == s.id }) else { return }
         sessions[i].state = .needsInput
-        attention = AttentionRequest(
-            sessionID: sessions[i].id,
-            title: "Run: rm -rf build && swift build",
-            detail: "\(sessions[i].name) is asking for permission")
+        pending.append(AttentionRequest(
+            id: UUID(), sessionID: s.id, title: "rm -rf build && swift build",
+            detail: "\(s.name) wants to use Bash", decide: { _ in }))
     }
 
     static func mockSessions() -> [Session] {

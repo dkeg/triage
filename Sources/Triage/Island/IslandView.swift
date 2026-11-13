@@ -23,7 +23,7 @@ struct IslandView: View {
         .padding(.top, IslandModel.topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: model.mode)
-        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: model.attention)
+        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: model.pending.count)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: model.sessions)
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
@@ -105,7 +105,7 @@ private struct ExpandedContent: View {
             .frame(height: 44)
 
             if let a = model.attention {
-                AttentionCard(request: a,
+                AttentionCard(request: a, more: model.pending.count - 1,
                               approve: { onResolve(true) },
                               deny: { onResolve(false) })
                     .padding(.horizontal, 14)
@@ -123,6 +123,7 @@ private struct ExpandedContent: View {
 
 private struct AttentionCard: View {
     let request: AttentionRequest
+    let more: Int
     let approve: () -> Void
     let deny: () -> Void
     var body: some View {
@@ -136,6 +137,9 @@ private struct AttentionCard: View {
                 Button("Deny", action: deny).buttonStyle(.bordered)
                 Button("Approve", action: approve).buttonStyle(.borderedProminent).tint(.orange)
                 Spacer()
+                if more > 0 {
+                    Text("+\(more) more").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
+                }
             }
             .controlSize(.small)
         }
