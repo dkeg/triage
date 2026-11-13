@@ -9,7 +9,7 @@ enum ApprovalGate {
         "dev.warp.Warp-Stable", "fun.tw93.kaku", "net.kovidgoyal.kitty", "org.alacritty", "com.github.wez.wezterm",
     ]
 
-    /// Developer override for experiments: `defaults write app.triage.Triage nativePromptHostsExtra -array <bundle id>`.
+    /// Developer override for experiments: `defaults write io.github.dkeg.triage nativePromptHostsExtra -array <bundle id>`.
     private static var extraHosts: Set<String> {
         Set(UserDefaults.standard.stringArray(forKey: "nativePromptHostsExtra") ?? [])
     }
