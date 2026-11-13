@@ -135,4 +135,32 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(m.sessions.map(\.externalID), ["live"])
         XCTAssertTrue(m.pending.isEmpty)
     }
+
+    func testDiscoveredSessionIsAdoptedByFirstHookEvent() {
+        let m = IslandModel()
+        m.discover(agents: [(pid: 4242, cwd: "/Users/x/triage", chain: [ProcRef(pid: 4242, name: "claude")], tty: nil)])
+        XCTAssertEqual(m.sessions.count, 1)
+        XCTAssertEqual(m.sessions[0].name, "triage")
+        XCTAssertNil(m.sessions[0].externalID)
+        let e = HookEvent.decode(Data(#"{"hook_event_name":"UserPromptSubmit","session_id":"real","cwd":"/Users/x/triage","prompt":"hi","_triage":{"chain":[{"pid":9,"name":"sh"},{"pid":4242,"name":"claude"}]}}"#.utf8))!
+        m.apply(e)
+        XCTAssertEqual(m.sessions.count, 1)               // adopted, not duplicated
+        XCTAssertEqual(m.sessions[0].externalID, "real")
+        XCTAssertEqual(m.sessions[0].state, .running)
+    }
+
+    func testDiscoverIsIdempotent() {
+        let m = IslandModel()
+        let a = [(pid: 1, cwd: "/a" as String?, chain: [ProcRef(pid: 1, name: "claude")], tty: nil as String?)]
+        m.discover(agents: a); m.discover(agents: a)
+        XCTAssertEqual(m.sessions.count, 1)
+    }
+
+    func testDemoSessionDisappearsWhenAnswered() {
+        let m = IslandModel()
+        m.simulateAttention()
+        XCTAssertEqual(m.sessions.count, 1)
+        m.resolve(approve: true)
+        XCTAssertTrue(m.sessions.isEmpty)
+    }
 }

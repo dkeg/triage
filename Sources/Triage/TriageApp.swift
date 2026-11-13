@@ -8,7 +8,7 @@ struct TriageApp: App {
     var body: some Scene {
         MenuBarExtra("Triage", systemImage: "capsule.tophalf.filled") {
             Button("Toggle Island") { IslandController.shared.toggleVisibility() }
-            Button("Simulate Attention") { IslandController.shared.simulateAttention() }
+            Button("Simulate Request (demo)") { IslandController.shared.simulateAttention() }
             Divider()
             Button("Settings…") { SettingsWindow.show() }
                 .keyboardShortcut(",")

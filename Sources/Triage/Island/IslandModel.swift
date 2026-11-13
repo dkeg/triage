@@ -59,6 +59,15 @@ final class IslandModel {
         }
     }
 
+    /// Whether a screen point should count as hovering Triage. While collapsed, the middle of
+    /// the pill is the hardware/system island, which must not trigger anything: only Triage's
+    /// own wings count.
+    func hoverHit(_ point: CGPoint, in rect: CGRect, slack: CGFloat = 0) -> Bool {
+        guard rect.insetBy(dx: -slack, dy: -slack).contains(point) else { return false }
+        guard mode == .collapsed else { return true }
+        return abs(point.x - geometry.cutout.midX) >= centerReserve / 2
+    }
+
     /// Height of the band that lines up with the hardware island.
     var bandHeight: CGFloat { max(geometry.cutout.height - Self.topInset + 2, 30) }
 
@@ -89,14 +98,22 @@ final class IslandModel {
         markResolved(sessionID: req.sessionID)
     }
 
+    /// Demo request for trying the UI: one clearly labelled session, removed when answered.
     func simulateAttention() {
-        if sessions.isEmpty { sessions = Self.mockSessions() }
-        guard let s = sessions.first(where: { $0.source == .claudeCode }) ?? sessions.first,
-              let i = sessions.firstIndex(where: { $0.id == s.id }) else { return }
+        let demoID = "triage-demo"
+        let i: Int
+        if let existing = sessions.firstIndex(where: { $0.externalID == demoID }) { i = existing }
+        else {
+            sessions.append(Session(externalID: demoID, name: "Demo session", source: .claudeCode,
+                                    state: .needsInput, detail: "Simulated request"))
+            i = sessions.count - 1
+        }
         sessions[i].state = .needsInput
+        let sid = sessions[i].id
         pending.append(AttentionRequest(
-            id: UUID(), sessionID: s.id, title: "rm -rf build && swift build",
-            detail: "\(s.name) wants to use Bash", decide: { _ in }))
+            id: UUID(), sessionID: sid, title: "rm -rf build && swift build",
+            detail: "Demo session wants to use Bash",
+            decide: { [weak self] _ in self?.sessions.removeAll { $0.id == sid } }))
     }
 
     static func mockSessions() -> [Session] {

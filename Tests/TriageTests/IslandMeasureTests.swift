@@ -67,4 +67,21 @@ final class IslandMeasureTests: XCTestCase {
         m.yielding = true
         XCTAssertEqual(m.size, .zero)
     }
+
+    func testHardwareIslandDoesNotTriggerHover() {
+        let m = IslandModel()
+        m.geometry = IslandGeometry(cutout: CGRect(x: 838.5, y: 1093, width: 59, height: 40),
+                                    screenFrame: CGRect(x: 0, y: 0, width: 1736, height: 1133), isPhysical: true)
+        m.sessions = IslandModel.mockSessions()
+        m.pillWidthMode = .wide
+        let w = m.size.width
+        let rect = CGRect(x: 868 - w / 2, y: 1133 - 4 - m.size.height, width: w, height: m.size.height)
+        let y = rect.midY
+        XCTAssertFalse(m.hoverHit(CGPoint(x: 868, y: y), in: rect))          // over the hardware island
+        XCTAssertFalse(m.hoverHit(CGPoint(x: 868 + 60, y: y), in: rect))     // still inside the reserved middle
+        XCTAssertTrue(m.hoverHit(CGPoint(x: 868 + 120, y: y), in: rect))     // Triage's right wing
+        XCTAssertTrue(m.hoverHit(CGPoint(x: 868 - 120, y: y), in: rect))     // Triage's left wing
+        m.mode = .expanded                                                    // once open, the whole card counts
+        XCTAssertTrue(m.hoverHit(CGPoint(x: 868, y: y), in: rect))
+    }
 }

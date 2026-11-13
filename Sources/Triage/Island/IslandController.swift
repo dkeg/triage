@@ -53,8 +53,10 @@ final class IslandController {
             MainActor.assumeIsolated { self?.reposition() }
         }
         startServer()
+        discoverSessions()
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
+                self?.discoverSessions()
                 self?.model.pruneDead(isAlive: { kill(pid_t($0), 0) == 0 || errno == EPERM })
             }
         }
@@ -143,6 +145,18 @@ final class IslandController {
         }
     }
 
+    /// Finds running Claude Code processes so they show up before their first hook event.
+    func discoverSessions() {
+        let all = ProcessTree.pids(named: "claude")
+        let agents: [(pid: Int, cwd: String?, chain: [ProcRef], tty: String?)] = all.compactMap { pid in
+            // Skip helpers spawned by another claude process (e.g. `claude mcp ...`).
+            if let parent = ProcessTree.parent(of: pid), all.contains(parent) { return nil }
+            let chain = [ProcRef(pid: Int(pid), name: "claude")] + ProcessTree.ancestry(of: pid)
+            return (Int(pid), ProcessTree.cwd(of: pid), chain, ProcessTree.nearestTTY(from: pid))
+        }
+        model.discover(agents: agents)
+    }
+
     func reposition() {
         guard let panel, let screen = IslandGeometry.preferredScreen() else { return }
         model.geometry = .compute(for: screen)
@@ -229,7 +243,8 @@ final class IslandController {
         guard isVisible else { return }
         // Opening needs the pointer squarely on the pill; staying open gets a little slack.
         let slack: CGFloat = model.mode == .collapsed ? 0 : 8
-        let inside = model.size != .zero && currentRect.insetBy(dx: -slack, dy: -slack).contains(NSEvent.mouseLocation)
+        let inside = model.size != .zero
+            && model.hoverHit(NSEvent.mouseLocation, in: currentRect, slack: slack)
         if inside {
             collapseTask?.cancel()
             guard hoverOpen, model.mode == .collapsed, hoverTask == nil else { return }

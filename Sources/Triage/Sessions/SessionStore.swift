@@ -12,6 +12,12 @@ extension IslandModel {
     @discardableResult
     func upsertSession(for e: HookEvent) -> Int? {
         guard let ext = e.sessionID else { return nil }
+        // A session we discovered by scanning processes: attach the real session id to it.
+        if !sessions.contains(where: { $0.externalID == ext }),
+           let pid = e.triage?.chain?.first(where: { $0.name == "claude" })?.pid,
+           let d = sessions.firstIndex(where: { $0.externalID == nil && $0.agentPID == pid }) {
+            sessions[d].externalID = ext
+        }
         if let i = sessions.firstIndex(where: { $0.externalID == ext }) {
             if let t = e.sessionTitle, !t.isEmpty { sessions[i].name = t }
             if let c = e.cwd { sessions[i].cwd = c }
@@ -22,6 +28,16 @@ extension IslandModel {
         sessions.append(Session(externalID: ext, name: name, source: .claudeCode, state: .idle, detail: "",
                                 cwd: e.cwd, meta: e.triage))
         return sessions.count - 1
+    }
+
+    /// Adds sessions for running `claude` processes we haven't heard from yet, so the island
+    /// is useful straight after launch instead of waiting for the next hook event.
+    func discover(agents: [(pid: Int, cwd: String?, chain: [ProcRef], tty: String?)]) {
+        for a in agents where !sessions.contains(where: { $0.agentPID == a.pid }) {
+            let name = a.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Claude Code"
+            sessions.append(Session(name: name, source: .claudeCode, state: .idle, detail: "Running",
+                                    cwd: a.cwd, meta: TriageMeta(chain: a.chain, tty: a.tty)))
+        }
     }
 
     /// Applies a non-blocking lifecycle event.
