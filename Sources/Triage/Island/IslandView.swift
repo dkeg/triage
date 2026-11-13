@@ -33,7 +33,7 @@ struct IslandView: View {
             }
         }
         .opacity(size == .zero ? 0 : 1)
-        .padding(.top, IslandModel.topInset)
+        .padding(.top, model.topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: model.mode)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: model.centerReserve)

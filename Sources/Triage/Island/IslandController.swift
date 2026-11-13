@@ -93,6 +93,8 @@ final class IslandController {
         if model.pillSide != side { model.pillSide = side }
         let secs = defaults.object(forKey: Pref.rotateSeconds) as? Double ?? 3.5
         if model.rotateInterval != secs { model.rotateInterval = secs }
+        let nudge = CGFloat(defaults.object(forKey: Pref.pillNudge) as? Double ?? 0)
+        if model.pillNudge != nudge { model.pillNudge = nudge }
     }
 
     /// Applies the width setting and runs the system-island probe only in Auto.
@@ -275,7 +277,7 @@ final class IslandController {
     private var currentRect: CGRect {
         let g = model.geometry
         let s = model.size
-        let top = g.screenFrame.maxY - IslandModel.topInset
+        let top = g.screenFrame.maxY - model.topInset
         return CGRect(x: g.cutout.midX - s.width / 2, y: top - s.height, width: s.width, height: s.height)
     }
 

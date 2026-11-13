@@ -9,5 +9,6 @@ enum Pref {
     static let pillWidth = "pillWidth"
     static let pillSide = "pillSide"
     static let rotateSeconds = "rotateSeconds"
+    static let pillNudge = "pillNudge"
     static let approvalTimeout = "approvalTimeout"
 }

@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(Pref.pillWidth) private var pillWidth = PillWidthMode.wide.rawValue
     @AppStorage(Pref.pillSide) private var pillSide = PillSide.left.rawValue
     @AppStorage(Pref.rotateSeconds) private var rotateSeconds = 3.5
+    @AppStorage(Pref.pillNudge) private var pillNudge = 0.0
     @State private var screenAccess = SystemIslandProbe.hasPermission
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
@@ -47,6 +48,12 @@ struct SettingsView: View {
                 Picker("Pill side", selection: $pillSide) {
                     ForEach(PillSide.allCases) { Text($0.label).tag($0.rawValue) }
                 }
+                LabeledContent("Move pill up") {
+                    Slider(value: $pillNudge, in: 0...3, step: 0.5) { Text("") }.frame(width: 160)
+                    Text(String(format: "%.1fpt", pillNudge)).monospacedDigit().frame(width: 48)
+                }
+                Text("Fine-tune the pill's height on screen. 0.5pt is one physical pixel; the pill keeps its size.")
+                    .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Cycle every") {
                     Slider(value: $rotateSeconds, in: 1.5...10, step: 0.5) { Text("") }.frame(width: 160)
                     Text(String(format: "%.1fs", rotateSeconds)).monospacedDigit().frame(width: 48)
@@ -97,7 +104,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { hooksInstalled = HookInstaller.isInstalled(); screenAccess = SystemIslandProbe.hasPermission }
-        .frame(width: 460, height: 860)
+        .frame(width: 460, height: 930)
     }
 
     private func install() {

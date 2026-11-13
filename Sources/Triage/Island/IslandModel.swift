@@ -54,7 +54,12 @@ final class IslandModel {
     var waitingCount: Int { needsInputCount }
 
     /// The hardware island floats about this far below the top screen edge; we match it.
-    static let topInset: CGFloat = 8
+    static let baseTopInset: CGFloat = 8
+    /// Fixed pill height, so moving the pill never resizes it.
+    static let pillHeight: CGFloat = 33
+    /// How far the pill is nudged up from its base position, in points (0.5pt = 1 physical pixel).
+    var pillNudge: CGFloat = 0
+    var topInset: CGFloat { Self.baseTopInset - pillNudge }
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let wideReserve: CGFloat = 150
     static let wing: CGFloat = 96
@@ -83,9 +88,9 @@ final class IslandModel {
     }
 
     /// Height of the band that lines up with the hardware island.
-    var bandHeight: CGFloat { max(geometry.cutout.height - Self.topInset + 1, 30) }
+    var bandHeight: CGFloat { Self.pillHeight }
 
-    /// Floating pill size for the current mode. Origin is Self.topInset below the screen top.
+    /// Floating pill size for the current mode. Origin is `topInset` below the screen top.
     var size: CGSize {
         let band = bandHeight
         let wide = centerReserve + Self.wing * 2

@@ -101,4 +101,19 @@ final class IslandMeasureTests: XCTestCase {
         m.pillSide = .left
         XCTAssertTrue(m.hoverHit(CGPoint(x: 868 - 120, y: y), in: rect))
     }
+
+    func testNudgeMovesThePillWithoutResizingIt() {
+        let m = IslandModel()
+        m.geometry = IslandGeometry(cutout: CGRect(x: 838.5, y: 1093, width: 59, height: 40),
+                                    screenFrame: CGRect(x: 0, y: 0, width: 1736, height: 1133), isPhysical: true)
+        m.sessions = IslandModel.mockSessions()
+        let height = m.size.height
+        let base = m.topInset
+        m.pillNudge = 0.5
+        XCTAssertEqual(m.topInset, base - 0.5)
+        XCTAssertEqual(m.size.height, height)
+        m.pillNudge = 1
+        XCTAssertEqual(m.topInset, base - 1)
+        XCTAssertEqual(m.size.height, height)
+    }
 }
