@@ -87,8 +87,17 @@ final class IslandController {
         }
     }
 
+    /// Reads the side and cycle-timing settings into the model (only when they changed).
+    private func applyPillPrefs() {
+        let side = PillSide(rawValue: defaults.string(forKey: Pref.pillSide) ?? "") ?? .left
+        if model.pillSide != side { model.pillSide = side }
+        let secs = defaults.object(forKey: Pref.rotateSeconds) as? Double ?? 3.5
+        if model.rotateInterval != secs { model.rotateInterval = secs }
+    }
+
     /// Applies the width setting and runs the system-island probe only in Auto.
     func applyPillWidthMode() {
+        applyPillPrefs()
         let mode = pillWidthMode
         guard mode != model.pillWidthMode || (mode == .auto) != (probe.status != .idle) else { return }
         model.pillWidthMode = mode
@@ -277,8 +286,10 @@ final class IslandController {
         let r = currentRect, f = panel.frame
         func rel(_ x: CGRect) -> CGRect { CGRect(x: x.minX - f.minX, y: x.minY - f.minY, width: x.width, height: x.height) }
         guard model.mode == .collapsed else { return [rel(r)] }
-        let pill = r.width / 2 - model.centerReserve / 2
-        return [rel(CGRect(x: r.minX, y: r.minY, width: pill, height: r.height))]
+        let half = model.centerReserve / 2
+        let pill = r.width / 2 - half
+        let x = model.pillSide == .left ? r.minX : r.midX + half
+        return [rel(CGRect(x: x, y: r.minY, width: pill, height: r.height))]
     }
 
     private func mouseMoved() {

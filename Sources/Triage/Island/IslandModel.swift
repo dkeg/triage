@@ -4,6 +4,13 @@ import TriageCore
 
 enum IslandMode: Equatable { case collapsed, peek, expanded }
 
+/// Which side of the hardware island the status pill sits on.
+enum PillSide: String, CaseIterable, Identifiable {
+    case left, right
+    var id: String { rawValue }
+    var label: String { self == .left ? "Left" : "Right" }
+}
+
 /// How wide the collapsed pill is.
 enum PillWidthMode: String, CaseIterable, Identifiable {
     /// Hugs the hardware island.
@@ -32,6 +39,9 @@ final class IslandModel {
     var geometry: IslandGeometry = .init(cutout: .zero, screenFrame: .zero, isPhysical: false)
 
     var pillWidthMode: PillWidthMode = .wide
+    var pillSide: PillSide = .left
+    /// Seconds between "All clear" and "N working".
+    var rotateInterval: TimeInterval = 3.5
     /// System island width measured by the probe (Auto mode), in points.
     var measuredIslandWidth: CGFloat?
     /// The system island is showing something large (Spotlight/Siri): hide the pill meanwhile.
@@ -44,7 +54,7 @@ final class IslandModel {
     var waitingCount: Int { needsInputCount }
 
     /// The hardware island floats about this far below the top screen edge; we match it.
-    static let topInset: CGFloat = 6
+    static let topInset: CGFloat = 8
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let wideReserve: CGFloat = 150
     static let wing: CGFloat = 96
@@ -63,12 +73,13 @@ final class IslandModel {
     }
 
     /// Whether a screen point should count as hovering triage. While collapsed, only the status
-    /// pill on the left of the hardware island counts: not the island itself, not the clear
-    /// space on its other side.
+    /// pill beside the hardware island counts: not the island itself, not the clear space on
+    /// its other side.
     func hoverHit(_ point: CGPoint, in rect: CGRect, slack: CGFloat = 0) -> Bool {
         guard rect.insetBy(dx: -slack, dy: -slack).contains(point) else { return false }
         guard mode == .collapsed else { return true }
-        return point.x <= geometry.cutout.midX - centerReserve / 2
+        let half = centerReserve / 2
+        return pillSide == .left ? point.x <= geometry.cutout.midX - half : point.x >= geometry.cutout.midX + half
     }
 
     /// Height of the band that lines up with the hardware island.

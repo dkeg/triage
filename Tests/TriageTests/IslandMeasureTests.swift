@@ -84,4 +84,21 @@ final class IslandMeasureTests: XCTestCase {
         m.mode = .expanded                                                    // once open, the whole card counts
         XCTAssertTrue(m.hoverHit(CGPoint(x: 868, y: y), in: rect))
     }
+
+    func testHoverFollowsPillSide() {
+        let m = IslandModel()
+        m.geometry = IslandGeometry(cutout: CGRect(x: 838.5, y: 1093, width: 59, height: 40),
+                                    screenFrame: CGRect(x: 0, y: 0, width: 1736, height: 1133), isPhysical: true)
+        m.sessions = IslandModel.mockSessions()
+        m.pillWidthMode = .wide
+        let w = m.size.width
+        let rect = CGRect(x: 868 - w / 2, y: 1133 - 4 - m.size.height, width: w, height: m.size.height)
+        let y = rect.midY
+        m.pillSide = .right
+        XCTAssertTrue(m.hoverHit(CGPoint(x: 868 + 120, y: y), in: rect))
+        XCTAssertFalse(m.hoverHit(CGPoint(x: 868 - 120, y: y), in: rect))
+        XCTAssertFalse(m.hoverHit(CGPoint(x: 868 + 60, y: y), in: rect))     // reserved middle
+        m.pillSide = .left
+        XCTAssertTrue(m.hoverHit(CGPoint(x: 868 - 120, y: y), in: rect))
+    }
 }

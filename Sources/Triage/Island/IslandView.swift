@@ -16,7 +16,7 @@ struct IslandView: View {
             if model.mode == .collapsed {
                 // One status pill beside the hardware island; the rest of the frame is clear.
                 StatusPill(model: model, onOpen: onOpen)
-                    .frame(width: size.width, height: size.height, alignment: .leading)
+                    .frame(width: size.width, height: size.height)
             } else {
                 ZStack(alignment: .top) {
                     shape.fill(Color.black)
@@ -278,7 +278,7 @@ private struct HostIcon: View {
     }
 }
 
-/// The collapsed pill: a single status pill to the left of the hardware island. It rotates
+/// The collapsed pill: a single status pill beside the hardware island. It rotates
 /// between "All clear" and "N working"; anything that needs you (pending approval, waiting
 /// question) takes it over and stays put.
 private struct StatusPill: View {
@@ -286,12 +286,20 @@ private struct StatusPill: View {
     let onOpen: () -> Void
 
     var body: some View {
+        let pill = FlashingPill(width: IslandModel.wing, height: model.bandHeight,
+                                flashing: model.pending.count > 0, onOpen: onOpen,
+                                content: StatusRotator(model: model))
+        let clear = Color.clear.frame(width: IslandModel.wing, height: 1)   // keeps the island centered
         HStack(spacing: 0) {
-            FlashingPill(width: IslandModel.wing, height: model.bandHeight,
-                         flashing: model.pending.count > 0, onOpen: onOpen,
-                         content: StatusRotator(model: model))
-            Spacer(minLength: 0).frame(width: model.centerReserve)
-            Color.clear.frame(width: IslandModel.wing, height: 1)   // keeps the island centered
+            if model.pillSide == .left {
+                pill
+                Spacer(minLength: 0).frame(width: model.centerReserve)
+                clear
+            } else {
+                clear
+                Spacer(minLength: 0).frame(width: model.centerReserve)
+                pill
+            }
         }
     }
 }
@@ -299,7 +307,7 @@ private struct StatusPill: View {
 /// What the pill says. Urgent states are fixed; the idle ones alternate every few seconds.
 private struct StatusRotator: View {
     let model: IslandModel
-    private let interval: TimeInterval = 3.5
+    private var interval: TimeInterval { max(model.rotateInterval, 1) }
 
     private struct Line {
         let text: String

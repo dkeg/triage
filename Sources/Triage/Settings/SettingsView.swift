@@ -10,6 +10,8 @@ struct SettingsView: View {
     @AppStorage(Pref.autoCollapseSeconds) private var autoCollapse = 5.0
     @AppStorage(Pref.holdWhenFocused) private var holdWhenFocused = true
     @AppStorage(Pref.pillWidth) private var pillWidth = PillWidthMode.wide.rawValue
+    @AppStorage(Pref.pillSide) private var pillSide = PillSide.left.rawValue
+    @AppStorage(Pref.rotateSeconds) private var rotateSeconds = 3.5
     @State private var screenAccess = SystemIslandProbe.hasPermission
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
@@ -42,6 +44,15 @@ struct SettingsView: View {
                 Picker("Collapsed width", selection: $pillWidth) {
                     ForEach(PillWidthMode.allCases) { Text($0.label).tag($0.rawValue) }
                 }
+                Picker("Pill side", selection: $pillSide) {
+                    ForEach(PillSide.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                LabeledContent("Cycle every") {
+                    Slider(value: $rotateSeconds, in: 1.5...10, step: 0.5) { Text("") }.frame(width: 160)
+                    Text(String(format: "%.1fs", rotateSeconds)).monospacedDigit().frame(width: 48)
+                }
+                Text("The pill alternates between \"All clear\" and \"N working\". Pending approvals and questions always stay on screen.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Group {
                     switch PillWidthMode(rawValue: pillWidth) ?? .wide {
                     case .compact: Text("Hugs the hardware island. Status text can sit under the system island while it shows a Live Activity.")
@@ -86,7 +97,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { hooksInstalled = HookInstaller.isInstalled(); screenAccess = SystemIslandProbe.hasPermission }
-        .frame(width: 460, height: 780)
+        .frame(width: 460, height: 860)
     }
 
     private func install() {
