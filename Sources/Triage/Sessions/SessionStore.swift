@@ -139,7 +139,10 @@ extension IslandModel {
             let answered: Bool
             switch e.eventName {
             case "PostToolUse", "PostToolUseFailure":
-                answered = r.toolName == (e.toolName ?? "") && r.toolInput == e.toolInput
+                // Same call: identical input, or the same command/path (the completion event can carry a
+                // slightly different input object than the request did).
+                answered = r.toolName == (e.toolName ?? "")
+                    && (r.toolInput == e.toolInput || (!r.command.isEmpty && r.command == e.fullCommand))
             case "Stop", "UserPromptSubmit", "SessionEnd":
                 answered = true
             default:

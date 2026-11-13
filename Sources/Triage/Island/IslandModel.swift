@@ -78,6 +78,11 @@ final class IslandModel {
     /// Everything that wants you, matching what Subspace calls "waiting on you".
     var waitingCount: Int { needsInputCount + finishedWaitingCount }
 
+    /// Opening the island counts as having looked at finished sessions.
+    func acknowledgeAllFinished() {
+        for i in sessions.indices where sessions[i].state == .done { sessions[i].acknowledged = true }
+    }
+
     func acknowledge(_ id: UUID) {
         if let i = sessions.firstIndex(where: { $0.id == id }) { sessions[i].acknowledged = true }
     }

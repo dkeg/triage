@@ -188,6 +188,7 @@ final class IslandController {
 
     func set(_ mode: IslandMode) {
         guard model.mode != mode else { return }
+        if mode == .expanded { model.acknowledgeAllFinished() }
         model.mode = mode
     }
 

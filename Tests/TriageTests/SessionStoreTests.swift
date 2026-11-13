@@ -249,4 +249,20 @@ final class SessionStoreTests: XCTestCase {
             XCTAssertTrue(closed, endEvent)
         }
     }
+
+    func testCompletionWithSlightlyDifferentInputStillClearsTheRequest() {
+        let m = IslandModel()
+        m.addPermission(event("PermissionRequest", #","tool_name":"Bash","tool_input":{"command":"swift build","description":"Build it","timeout":120000}"#)) { _ in }
+        m.apply(event("PostToolUse", #","tool_name":"Bash","tool_input":{"command":"swift build"}"#))
+        XCTAssertTrue(m.pending.isEmpty)
+    }
+
+    func testOpeningTheIslandMarksFinishedSessionsSeen() {
+        let m = IslandModel()
+        m.apply(event("Stop", session: "a"))
+        m.apply(event("Stop", session: "b"))
+        XCTAssertEqual(m.waitingCount, 2)
+        m.acknowledgeAllFinished()
+        XCTAssertEqual(m.waitingCount, 0)
+    }
 }
