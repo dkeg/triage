@@ -9,8 +9,13 @@ enum ApprovalGate {
         "dev.warp.Warp-Stable", "fun.tw93.kaku", "net.kovidgoyal.kitty", "org.alacritty", "com.github.wez.wezterm",
     ]
 
+    /// Developer override for experiments: `defaults write app.triage.Triage nativePromptHostsExtra -array <bundle id>`.
+    private static var extraHosts: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: "nativePromptHostsExtra") ?? [])
+    }
+
     static func canHandBack(hostBundleID: String?) -> Bool {
-        hostBundleID.map(nativePromptHosts.contains) ?? false
+        hostBundleID.map { nativePromptHosts.contains($0) || extraHosts.contains($0) } ?? false
     }
 
     /// True when a permission request should NOT go to the island: the app that sent it is the
