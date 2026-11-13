@@ -64,7 +64,23 @@ final class IslandModel {
     var yielding = false
 
     var hasActivity: Bool { !sessions.isEmpty }
+    /// Ticks every few seconds so time-based states (finished sessions aging out) refresh.
+    var clock = Date()
+    static let finishedWaitingWindow: TimeInterval = 30 * 60
+
+    /// Approvals and questions: the agent is blocked on you.
     var needsInputCount: Int { sessions.filter { $0.state == .needsInput }.count }
+    /// Finished and waiting for your next prompt (recent, and not yet looked at).
+    var finishedWaitingCount: Int {
+        sessions.filter { $0.state == .done && !$0.acknowledged
+            && clock.timeIntervalSince($0.lastActivity) < Self.finishedWaitingWindow }.count
+    }
+    /// Everything that wants you, matching what Subspace calls "waiting on you".
+    var waitingCount: Int { needsInputCount + finishedWaitingCount }
+
+    func acknowledge(_ id: UUID) {
+        if let i = sessions.firstIndex(where: { $0.id == id }) { sessions[i].acknowledged = true }
+    }
 
     /// The hardware island floats about this far below the top screen edge; we match it.
     static let topInset: CGFloat = 6
@@ -111,12 +127,33 @@ final class IslandModel {
         case .expanded:
             let rows = min(sessions.count, 5)
             let body = 44 + CGFloat(rows) * 52 + 8
-            let card: CGFloat = attention == nil ? 0 : 118
+            let card: CGFloat = attention.map(Self.cardHeight) ?? 0
             return CGSize(width: Self.expandedWidth, height: band + body + card)
         }
     }
 
     var cornerRadius: CGFloat { mode == .expanded ? 28 : bandHeight / 2 }
+
+    /// Estimated height of the approval card (the panel is sized from this, so it errs generous).
+    static func cardHeight(for r: AttentionRequest) -> CGFloat {
+        let charsPerLine = 66.0
+        let cmdLines = min(max(Int((Double(r.command.count) / charsPerLine).rounded(.up)), 1), 6)
+            + max(r.command.filter { $0 == "\n" }.count, 0)
+        var h: CGFloat = 12 + 16 + 8            // padding, header, gap
+        if r.note != nil { h += 16 }
+        h += CGFloat(min(cmdLines, 8)) * 16 + 8
+        if !r.preview.isEmpty { h += CGFloat(r.preview.count) * 14 + 16 }
+        h += 36                                  // buttons row + bottom padding
+        return h
+    }
+
+    /// Approves the oldest pending request and remembers it ("Always allow").
+    func resolveAlways() {
+        guard let req = pending.first, let always = req.allowAlways else { return }
+        pending.removeFirst()
+        always()
+        markResolved(sessionID: req.sessionID)
+    }
 
     /// Answers the oldest pending request.
     func resolve(approve: Bool) {
@@ -138,10 +175,20 @@ final class IslandModel {
         }
         sessions[i].state = .needsInput
         let sid = sessions[i].id
+        let done: () -> Void = { [weak self] in self?.sessions.removeAll { $0.id == sid } }
         pending.append(AttentionRequest(
-            id: UUID(), sessionID: sid, title: "rm -rf build && swift build",
-            detail: "Demo session wants to use Bash",
-            decide: { [weak self] _ in self?.sessions.removeAll { $0.id == sid } }))
+            id: UUID(), sessionID: sid, title: "Sources/Triage/Island/IslandView.swift",
+            detail: "Demo session wants to use Edit",
+            decide: { _ in done() },
+            command: "/Users/you/Projects/triage/Sources/Triage/Island/IslandView.swift",
+            note: "Make the wing pills 1px shorter",
+            toolName: "Edit",
+            preview: [DiffLine(kind: .removed, text: "static let topInset: CGFloat = 5"),
+                      DiffLine(kind: .added, text: "static let topInset: CGFloat = 6"),
+                      DiffLine(kind: .context, text: "… 2 more lines")],
+            location: "triage · main",
+            alwaysSummary: "Edit(/Users/you/Projects/triage/**)",
+            allowAlways: { done() }))
     }
 
     static func mockSessions() -> [Session] {

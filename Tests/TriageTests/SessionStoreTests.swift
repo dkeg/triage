@@ -17,7 +17,7 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(m.sessions[0].state, .running)
         XCTAssertEqual(m.sessions[0].detail, "fix the bug")
         m.apply(event("PreToolUse", #","tool_name":"Bash","tool_input":{"command":"swift build"}"#))
-        XCTAssertEqual(m.sessions[0].detail, "Bash: swift build")
+        XCTAssertEqual(m.sessions[0].detail, "Running: swift build")
         m.apply(event("Stop", #","last_assistant_message":"All done""#))
         XCTAssertEqual(m.sessions[0].state, .done)
         m.apply(event("SessionEnd"))
@@ -175,5 +175,78 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(m.pending.first?.hostBundleID, "fun.tw93.kaku")
         XCTAssertTrue(ApprovalGate.canHandBack(hostBundleID: "fun.tw93.kaku"))
         m.release(id: id); XCTAssertTrue(released)
+    }
+
+    func testNestedClaudeProcessesDoNotDuplicateASession() {
+        let m = IslandModel()
+        // Process scan finds the outer claude (100); the hook sees the nearer wrapper (101) then the outer.
+        m.discover(agents: [(pid: 100, cwd: "/p/triage", chain: [ProcRef(pid: 100, name: "claude")], tty: nil)])
+        let e = HookEvent.decode(Data(#"{"hook_event_name":"UserPromptSubmit","session_id":"real","cwd":"/p/triage","prompt":"x","_triage":{"chain":[{"pid":9,"name":"sh"},{"pid":101,"name":"claude"},{"pid":100,"name":"claude"}]}}"#.utf8))!
+        m.apply(e)
+        XCTAssertEqual(m.sessions.count, 1)
+        XCTAssertEqual(m.sessions[0].externalID, "real")
+        // Re-scanning must not add it back.
+        m.discover(agents: [(pid: 100, cwd: "/p/triage", chain: [ProcRef(pid: 100, name: "claude")], tty: nil)])
+        XCTAssertEqual(m.sessions.count, 1)
+        // The wrapper exiting alone does not prune the session while the outer one lives.
+        m.pruneDead(isAlive: { $0 == 100 })
+        XCTAssertEqual(m.sessions.count, 1)
+    }
+
+    func testFinishedSessionCountsAsWaitingUntilAcknowledgedOrStale() {
+        let m = IslandModel()
+        m.apply(event("Stop", #","last_assistant_message":"done""#))
+        XCTAssertEqual(m.needsInputCount, 0)
+        XCTAssertEqual(m.finishedWaitingCount, 1)
+        XCTAssertEqual(m.waitingCount, 1)
+        m.clock = Date().addingTimeInterval(IslandModel.finishedWaitingWindow + 5)   // ages out
+        XCTAssertEqual(m.waitingCount, 0)
+        m.clock = Date()
+        XCTAssertEqual(m.waitingCount, 1)
+        m.acknowledge(m.sessions[0].id)                                              // user looked at it
+        XCTAssertEqual(m.waitingCount, 0)
+        m.apply(event("Stop"))                                                       // finishes again: counts again
+        XCTAssertEqual(m.waitingCount, 1)
+        m.apply(event("UserPromptSubmit", #","prompt":"next""#))                   // you replied
+        XCTAssertEqual(m.waitingCount, 0)
+    }
+
+    func testApprovalsAndFinishedBothCount() {
+        let m = IslandModel()
+        m.apply(event("Stop", session: "a"))
+        m.addPermission(event("PermissionRequest", session: "b", #","tool_name":"Bash""#)) { _ in }
+        XCTAssertEqual(m.needsInputCount, 1)
+        XCTAssertEqual(m.finishedWaitingCount, 1)
+        XCTAssertEqual(m.waitingCount, 2)
+    }
+
+    func testApprovingInTheAppClearsTheStuckRequestWhenTheToolFinishes() {
+        let m = IslandModel()
+        var closed = false
+        m.addPermission(event("PermissionRequest", #","tool_name":"Bash","tool_input":{"command":"ls"}"#), release: { closed = true }) { _ in }
+        XCTAssertEqual(m.pending.count, 1)
+        m.apply(event("PostToolUse", #","tool_name":"Bash","tool_input":{"command":"ls"}"#))
+        XCTAssertTrue(m.pending.isEmpty)
+        XCTAssertTrue(closed)                       // the hook is released, not left hanging
+        XCTAssertEqual(m.sessions[0].state, .running)
+    }
+
+    func testAnotherToolFinishingDoesNotClearAnUnansweredRequest() {
+        let m = IslandModel()
+        m.addPermission(event("PermissionRequest", #","tool_name":"Bash","tool_input":{"command":"rm x"}"#)) { _ in }
+        m.apply(event("PostToolUse", #","tool_name":"Read","tool_input":{"file_path":"/a"}"#))          // parallel tool
+        m.apply(event("PostToolUse", #","tool_name":"Bash","tool_input":{"command":"ls"}"#))            // different command
+        XCTAssertEqual(m.pending.count, 1)
+    }
+
+    func testTurnEndingOrRestartingClearsPendingRequests() {
+        for endEvent in ["Stop", "UserPromptSubmit", "SessionEnd"] {
+            let m = IslandModel()
+            var closed = false
+            m.addPermission(event("PermissionRequest", #","tool_name":"Bash","tool_input":{"command":"ls"}"#), release: { closed = true }) { _ in }
+            m.apply(event(endEvent))
+            XCTAssertTrue(m.pending.isEmpty, endEvent)
+            XCTAssertTrue(closed, endEvent)
+        }
     }
 }

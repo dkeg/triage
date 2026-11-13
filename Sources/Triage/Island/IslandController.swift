@@ -35,6 +35,10 @@ final class IslandController {
             self?.resolve(approve: approve)
         }, onSkip: { [weak self] in
             self?.skipFirst()
+        }, onAlways: { [weak self] in
+            self?.approveAlways()
+        }, onOpen: { [weak self] in
+            self?.openFromClick()
         }, onJump: { [weak self] session in
             self?.jump(to: session)
         }))
@@ -56,6 +60,7 @@ final class IslandController {
         discoverSessions()
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
+                self?.model.clock = Date()
                 self?.discoverSessions()
                 self?.model.pruneDead(isAlive: { kill(pid_t($0), 0) == 0 || errno == EPERM })
             }
@@ -112,7 +117,13 @@ final class IslandController {
             }
             TriageLog.write("PermissionRequest session=\(event.sessionID ?? "?") tool=\(event.toolName ?? "?") host=\(hostID ?? "none") frontmost=\(frontID ?? "none")")
             let handBack = ApprovalGate.canHandBack(hostBundleID: hostID)
-            let id = model.addPermission(event, canHandBack: handBack, release: { conn.reply(Data()) }) { approve in
+            let suggestions = event.permissionSuggestions ?? []
+            TriageLog.write("suggestions: \(suggestions.isEmpty ? "none" : String(describing: suggestions).prefix(300).description)")
+            let always: (() -> Void)? = suggestions.isEmpty ? nil : {
+                TriageLog.write("decision approve=true (always allow) session=\(event.sessionID ?? "?")")
+                conn.reply(HookDecision.permissionResponse(allow: true, updatedPermissions: suggestions))
+            }
+            let id = model.addPermission(event, canHandBack: handBack, release: { conn.reply(Data()) }, allowAlways: always) { approve in
                 TriageLog.write("decision approve=\(approve) session=\(event.sessionID ?? "?")")
                 conn.reply(HookDecision.permissionResponse(allow: approve,
                                                            message: approve ? nil : "Denied from triage"))
@@ -140,8 +151,13 @@ final class IslandController {
             }
         } else {
             TriageLog.write("\(event.eventName) session=\(event.sessionID ?? "?")")
+            let before = model.pending.count
             model.apply(event)
             conn.reply(Data())
+            if model.pending.count < before {
+                TriageLog.write("request cleared: answered elsewhere (\(event.eventName)) session=\(event.sessionID ?? "?")")
+                if model.pending.isEmpty, openedByAttention { scheduleCollapse(after: 0.6) }
+            }
         }
     }
 
@@ -184,9 +200,23 @@ final class IslandController {
 
     /// Brings the session's terminal forward and tucks the island away.
     func jump(to session: Session) {
+        model.acknowledge(session.id)
         focuser.focus(session)
         openedByAttention = false
         scheduleCollapse(after: 0.15)
+    }
+
+    /// Clicking a wing opens the island right away.
+    func openFromClick() {
+        TriageLog.write("island opened: click (waiting=\(model.waitingCount), pending=\(model.pending.count))")
+        openedByAttention = false
+        set(.expanded)
+    }
+
+    func approveAlways() {
+        model.resolveAlways()
+        openedByAttention = false
+        scheduleCollapse(after: 0.6)
     }
 
     /// "Skip": hand the oldest request back to the terminal's own prompt.
@@ -255,7 +285,9 @@ final class IslandController {
             collapseTask?.cancel()
             guard hoverOpen, model.mode == .collapsed, hoverTask == nil else { return }
             hoverTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(self?.hoverDelay ?? 0.25))
+                // Be quick when something is blocked on you.
+                let urgent = self?.model.attention != nil
+                try? await Task.sleep(for: .seconds(urgent ? 0.12 : (self?.hoverDelay ?? 0.5)))
                 guard !Task.isCancelled, let self else { return }
                 self.hoverTask = nil
                 self.openedByAttention = false

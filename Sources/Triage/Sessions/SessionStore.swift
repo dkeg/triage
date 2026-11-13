@@ -14,8 +14,8 @@ extension IslandModel {
         guard let ext = e.sessionID else { return nil }
         // A session we discovered by scanning processes: attach the real session id to it.
         if !sessions.contains(where: { $0.externalID == ext }),
-           let pid = e.triage?.chain?.first(where: { $0.name == "claude" })?.pid,
-           let d = sessions.firstIndex(where: { $0.externalID == nil && $0.agentPID == pid }) {
+           case let pids = Set((e.triage?.chain ?? []).filter { $0.name == "claude" }.map(\.pid)), !pids.isEmpty,
+           let d = sessions.firstIndex(where: { $0.externalID == nil && !$0.agentPIDs.isDisjoint(with: pids) }) {
             sessions[d].externalID = ext
         }
         if let i = sessions.firstIndex(where: { $0.externalID == ext }) {
@@ -36,7 +36,7 @@ extension IslandModel {
     /// Adds sessions for running `claude` processes we haven't heard from yet, so the island
     /// is useful straight after launch instead of waiting for the next hook event.
     func discover(agents: [(pid: Int, cwd: String?, chain: [ProcRef], tty: String?)]) {
-        for a in agents where !sessions.contains(where: { $0.agentPID == a.pid }) {
+        for a in agents where !sessions.contains(where: { $0.agentPIDs.contains(a.pid) }) {
             let name = a.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Claude Code"
             sessions.append(Session(name: name, source: .claudeCode, state: .idle, detail: "Running",
                                     cwd: a.cwd, meta: TriageMeta(chain: a.chain, tty: a.tty),
@@ -48,25 +48,30 @@ extension IslandModel {
     func apply(_ e: HookEvent) {
         if e.eventName == "SessionEnd" {
             if let ext = e.sessionID, let i = sessions.firstIndex(where: { $0.externalID == ext }) {
-                pending.removeAll { $0.sessionID == sessions[i].id }
+                dropAnsweredRequests(for: e, sessionID: sessions[i].id)
                 sessions.remove(at: i)
             }
             return
         }
         guard let i = upsertSession(for: e) else { return }
         sessions[i].lastActivity = Date()
+        // Answered in the app itself (e.g. Subspace's own prompt) rather than here? Then the
+        // hook was never hung up on, so spot it from what happens next.
+        dropAnsweredRequests(for: e, sessionID: sessions[i].id)
         switch e.eventName {
         case "SessionStart":
             sessions[i].state = .idle
             sessions[i].detail = e.source == "resume" ? "Resumed" : "Started"
         case "UserPromptSubmit":
             sessions[i].state = .running
+            sessions[i].acknowledged = false
+            sessions[i].turnStartedAt = Date()
             sessions[i].detail = snippet(e.prompt)
         case "PreToolUse":
             // Don't clobber a pending approval for this session.
             if !pending.contains(where: { $0.sessionID == sessions[i].id }) { sessions[i].state = .running }
-            sessions[i].detail = [e.toolName, snippet(e.toolSummary, 70)].compactMap { $0 }
-                .filter { !$0.isEmpty }.joined(separator: ": ")
+            sessions[i].detail = Activity.describe(toolName: e.toolName, summary: e.toolSummary)
+            if sessions[i].turnStartedAt == nil { sessions[i].turnStartedAt = Date() }
         case "Notification":
             switch e.notificationType {
             case "idle_prompt":
@@ -87,6 +92,8 @@ extension IslandModel {
             if !pending.contains(where: { $0.sessionID == sessions[i].id }) { sessions[i].state = .running }
         case "Stop":
             sessions[i].state = .done
+            sessions[i].acknowledged = false
+            sessions[i].turnStartedAt = nil
             sessions[i].detail = snippet(e.lastAssistantMessage).isEmpty ? "Finished" : snippet(e.lastAssistantMessage)
         default:
             break
@@ -96,7 +103,7 @@ extension IslandModel {
     /// Registers a blocking permission request. Returns its id so it can be cancelled.
     @discardableResult
     func addPermission(_ e: HookEvent, canHandBack: Bool = false, release: @escaping () -> Void = {},
-                       decide: @escaping (Bool) -> Void) -> UUID? {
+                       allowAlways: (() -> Void)? = nil, decide: @escaping (Bool) -> Void) -> UUID? {
         guard let i = upsertSession(for: e) else { return nil }
         let session = sessions[i]
         sessions[i].state = .needsInput
@@ -105,7 +112,11 @@ extension IslandModel {
         let req = AttentionRequest(id: UUID(), sessionID: session.id,
                                    title: e.toolSummary ?? e.toolName ?? "Permission request",
                                    detail: "\(session.name) wants to use \(e.toolName ?? "a tool")",
-                                   decide: decide, canHandBack: canHandBack, hostBundleID: session.hostBundleID, release: release)
+                                   decide: decide, canHandBack: canHandBack, hostBundleID: session.hostBundleID, release: release,
+                                   command: e.fullCommand, note: e.toolNote, toolName: e.toolName ?? "", toolInput: e.toolInput,
+                                   preview: e.diffPreview, location: Self.location(cwd: e.cwd ?? session.cwd),
+                                   alwaysSummary: allowAlways == nil ? nil : e.suggestionSummary,
+                                   allowAlways: allowAlways)
         pending.append(req)
         return req.id
     }
@@ -116,6 +127,37 @@ extension IslandModel {
         let sid = pending[idx].sessionID
         pending.remove(at: idx)
         markResolved(sessionID: sid)
+    }
+
+    /// Removes pending requests that are no longer waiting on anyone: the same tool call finished,
+    /// or the turn ended/restarted. Closes their hooks so nothing is left hanging.
+    @discardableResult
+    func dropAnsweredRequests(for e: HookEvent, sessionID: UUID) -> Int {
+        var dropped: [AttentionRequest] = []
+        pending.removeAll { r in
+            guard r.sessionID == sessionID else { return false }
+            let answered: Bool
+            switch e.eventName {
+            case "PostToolUse", "PostToolUseFailure":
+                answered = r.toolName == (e.toolName ?? "") && r.toolInput == e.toolInput
+            case "Stop", "UserPromptSubmit", "SessionEnd":
+                answered = true
+            default:
+                answered = false
+            }
+            if answered { dropped.append(r) }
+            return answered
+        }
+        dropped.forEach { $0.release() }
+        return dropped.count
+    }
+
+    /// "folder · branch" for a working directory.
+    static func location(cwd: String?) -> String? {
+        guard let cwd, !cwd.isEmpty else { return nil }
+        let folder = URL(fileURLWithPath: cwd).lastPathComponent
+        guard let branch = GitInfo.branch(forDirectory: cwd) else { return folder }
+        return "\(folder) · \(branch)"
     }
 
     /// Hands a pending request back to the app's own prompt.
@@ -130,7 +172,7 @@ extension IslandModel {
     /// long-silent sessions we can't check.
     func pruneDead(isAlive: (Int) -> Bool, now: Date = Date(), maxIdle: TimeInterval = 12 * 3600) {
         let dead = sessions.filter { s in
-            if let pid = s.agentPID { return !isAlive(pid) }
+            if !s.agentPIDs.isEmpty { return !s.agentPIDs.contains(where: isAlive) }
             return now.timeIntervalSince(s.lastActivity) > maxIdle
         }
         guard !dead.isEmpty else { return }

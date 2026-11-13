@@ -56,9 +56,16 @@ struct Session: Identifiable, Equatable {
     var meta: TriageMeta?
     /// Bundle id of the app hosting this session, for its icon.
     var hostBundleID: String?
+    /// When the current turn started (set at the prompt, cleared when it finishes).
+    var turnStartedAt: Date?
+    /// The user has looked at this finished session (clicked it), so it no longer counts as waiting.
+    var acknowledged = false
 
     /// The agent process (Claude Code) this session belongs to, from the hook's ancestor chain.
     var agentPID: Int? { meta?.chain?.first(where: { $0.name == "claude" })?.pid }
+    /// Every `claude` process in the chain. Subspace runs Claude under a wrapper `claude`, so the
+    /// nearest one (seen by hooks) can differ from the outer one (found by scanning processes).
+    var agentPIDs: Set<Int> { Set((meta?.chain ?? []).filter { $0.name == "claude" }.map(\.pid)) }
 
     init(id: UUID = UUID(), externalID: String? = nil, name: String, source: SessionSource,
          state: SessionState, detail: String, lastActivity: Date = Date(),
@@ -81,6 +88,20 @@ struct AttentionRequest: Identifiable, Equatable {
     var canHandBack = false
     var hostBundleID: String? = nil
     var release: () -> Void = {}
+    /// Full text of what the tool will run or touch.
+    var command: String = ""
+    /// The tool's own description of the action, when it gives one.
+    var note: String? = nil
+    var toolName: String = ""
+    /// Raw tool input, to recognise the same call finishing (answered somewhere else).
+    var toolInput: [String: JSONValue]? = nil
+    var preview: [DiffLine] = []
+    /// "folder · branch"
+    var location: String? = nil
+    /// "Always allow": what would be remembered, and the call that sends it. Nil when Claude
+    /// offered no suggestions.
+    var alwaysSummary: String? = nil
+    var allowAlways: (() -> Void)? = nil
 
     static func == (a: Self, b: Self) -> Bool { a.id == b.id }
 }

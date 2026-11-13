@@ -1,4 +1,5 @@
 import SwiftUI
+import TriageCore
 
 struct IslandView: View {
     @Bindable var model: IslandModel
@@ -6,6 +7,8 @@ struct IslandView: View {
     private var rimStyle: RimStyle { RimStyle(rawValue: rimStyleRaw) ?? .wingsOnly }
     var onResolve: (Bool) -> Void = { _ in }
     var onSkip: () -> Void = {}
+    var onAlways: () -> Void = {}
+    var onOpen: () -> Void = {}
     var onJump: (Session) -> Void = { _ in }
 
     var body: some View {
@@ -14,7 +17,7 @@ struct IslandView: View {
         Group {
             if isWingPills {
                 // Two separate floating pills either side of the hardware island.
-                WingPills(model: model)
+                WingPills(model: model, onOpen: onOpen)
                     .frame(width: size.width, height: size.height)
             } else {
             ZStack(alignment: .top) {
@@ -108,30 +111,45 @@ struct IslandView: View {
         switch model.mode {
         case .collapsed: CollapsedContent(model: model)
         case .peek: PeekContent(model: model)
-        case .expanded: ExpandedContent(model: model, onResolve: onResolve, onSkip: onSkip, onJump: onJump)
+        case .expanded: ExpandedContent(model: model, onResolve: onResolve, onSkip: onSkip, onAlways: onAlways, onJump: onJump)
         }
     }
 }
 
+/// Orange (pulsing) when something is blocked on you, blue when a session has finished and is
+/// waiting for your next prompt, green otherwise.
 private struct StatusDot: View {
-    let needsInput: Bool
+    let model: IslandModel
+    @State private var dim = false
+
+    private var color: Color {
+        model.needsInputCount > 0 ? .orange : model.finishedWaitingCount > 0 ? .blue : .green
+    }
+
     var body: some View {
-        Circle().fill(needsInput ? Color.orange : Color.green).frame(width: 7, height: 7)
+        Circle().fill(color).frame(width: 7, height: 7)
+            .opacity(model.needsInputCount > 0 && dim ? 0.3 : 1)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { dim = true }
+            }
     }
 }
 
-/// Status text sits in the wings, either side of the hardware island.
+/// "2 waiting" / "All clear"
+@MainActor private func waitingText(_ model: IslandModel) -> String {
+    model.waitingCount > 0 ? "\(model.waitingCount) waiting" : "All clear"
+}
+
 private struct CollapsedContent: View {
     let model: IslandModel
     var body: some View {
-        let waiting = model.needsInputCount
-        let working = model.sessions.filter { $0.state == .running }.count
+                let working = model.sessions.filter { $0.state == .running }.count
         HStack(spacing: 0) {
             HStack(spacing: 7) {
-                StatusDot(needsInput: waiting > 0)
-                Text(waiting > 0 ? "\(waiting) waiting" : "All clear")
+                StatusDot(model: model)
+                Text(waitingText(model))
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(waiting > 0 ? Color.orange : .white.opacity(0.9))
+                    .foregroundStyle(model.needsInputCount > 0 ? Color.orange : model.finishedWaitingCount > 0 ? Color.blue.opacity(0.9) : .white.opacity(0.9))
                     .lineLimit(1)
             }
             .frame(width: IslandModel.wing, alignment: .center)
@@ -150,9 +168,9 @@ private struct PeekContent: View {
     let model: IslandModel
     var body: some View {
         HStack(spacing: 8) {
-            StatusDot(needsInput: model.needsInputCount > 0)
-            Text(model.needsInputCount > 0
-                 ? "\(model.needsInputCount) waiting on you"
+            StatusDot(model: model)
+            Text(model.waitingCount > 0
+                 ? "\(model.waitingCount) waiting on you"
                  : "\(model.sessions.count) sessions running")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
@@ -167,6 +185,7 @@ private struct ExpandedContent: View {
     @Bindable var model: IslandModel
     let onResolve: (Bool) -> Void
     let onSkip: () -> Void
+    let onAlways: () -> Void
     let onJump: (Session) -> Void
     var body: some View {
         VStack(spacing: 0) {
@@ -184,7 +203,7 @@ private struct ExpandedContent: View {
             if let a = model.attention {
                 AttentionCard(request: a, more: model.pending.count - 1,
                               approve: { onResolve(true) },
-                              deny: { onResolve(false) }, skip: onSkip)
+                              deny: { onResolve(false) }, skip: onSkip, always: onAlways)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 8)
             }
@@ -204,19 +223,35 @@ private struct AttentionCard: View {
     let approve: () -> Void
     let deny: () -> Void
     let skip: () -> Void
+    let always: () -> Void
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 HostIcon(bundleID: request.hostBundleID, fallback: nil, size: 14)
-                Text(request.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+                Text(request.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                Spacer(minLength: 8)
+                if let loc = request.location {
+                    Text(loc).font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.4)).lineLimit(1)
+                }
             }
-            Text(request.title)
+            if let note = request.note {
+                Text(note).font(.system(size: 11)).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
+            }
+            Text(request.command)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.white)
-                .lineLimit(2)
+                .lineLimit(8)
+                .fixedSize(horizontal: false, vertical: true)
+            if !request.preview.isEmpty { DiffPreview(lines: request.preview) }
             HStack(spacing: 8) {
                 Button("Deny", action: deny).buttonStyle(.bordered)
                 Button("Approve", action: approve).buttonStyle(.borderedProminent).tint(.orange)
+                if request.allowAlways != nil {
+                    Button("Always allow", action: always).buttonStyle(.bordered)
+                        .help(request.alwaysSummary ?? "Remember this choice")
+                }
                 if request.canHandBack {
                     Button("Skip", action: skip).buttonStyle(.plain)
                         .foregroundStyle(.white.opacity(0.55)).help("Answer in the terminal's own prompt instead")
@@ -231,6 +266,36 @@ private struct AttentionCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.08)))
+    }
+}
+
+/// Before/after lines for edits and writes.
+private struct DiffPreview: View {
+    let lines: [DiffLine]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(prefix(line.kind) + line.text)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(color(line.kind))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 6)
+                    .frame(height: 14)
+                    .background(background(line.kind))
+            }
+        }
+        .padding(.vertical, 2)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.black.opacity(0.35)))
+    }
+    private func prefix(_ k: DiffLine.Kind) -> String { k == .added ? "+ " : k == .removed ? "- " : "  " }
+    private func color(_ k: DiffLine.Kind) -> Color {
+        k == .added ? Color(red: 0.55, green: 0.9, blue: 0.6) : k == .removed ? Color(red: 1, green: 0.6, blue: 0.6) : .white.opacity(0.5)
+    }
+    private func background(_ k: DiffLine.Kind) -> Color {
+        k == .added ? .green.opacity(0.12) : k == .removed ? .red.opacity(0.12) : .clear
     }
 }
 
@@ -253,7 +318,7 @@ private struct SessionRow: View {
                 } else {
                     HStack(spacing: 6) {
                         Circle().fill(session.state.color).frame(width: 6, height: 6)
-                        Text(session.state.label).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+                        StateLabel(session: session)
                     }
                 }
             }
@@ -266,6 +331,29 @@ private struct SessionRow: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("Jump to this session")
+    }
+}
+
+/// "Working 3m 12s" while a turn runs, "Done 2m ago" afterwards.
+private struct StateLabel: View {
+    let session: Session
+    var body: some View {
+        Group {
+            if session.state == .running, let start = session.turnStartedAt {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    Text("Working \(Activity.elapsed(ctx.date.timeIntervalSince(start)))")
+                }
+            } else if session.state == .done {
+                TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                    Text("Done \(Activity.ago(ctx.date.timeIntervalSince(session.lastActivity)))")
+                }
+            } else {
+                Text(session.state.label)
+            }
+        }
+        .font(.system(size: 11).monospacedDigit())
+        .foregroundStyle(.white.opacity(0.6))
+        .lineLimit(1)
     }
 }
 
@@ -289,17 +377,17 @@ private struct HostIcon: View {
 /// the system island; the middle is left clear for the hardware island.
 private struct WingPills: View {
     let model: IslandModel
+    let onOpen: () -> Void
 
     var body: some View {
-        let waiting = model.needsInputCount
-        let working = model.sessions.filter { $0.state == .running }.count
+                let working = model.sessions.filter { $0.state == .running }.count
         HStack(spacing: 0) {
             pill {
                 HStack(spacing: 7) {
-                    StatusDot(needsInput: waiting > 0)
-                    Text(waiting > 0 ? "\(waiting) waiting" : "All clear")
+                    StatusDot(model: model)
+                    Text(waitingText(model))
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(waiting > 0 ? Color.orange : .white.opacity(0.9))
+                        .foregroundStyle(model.needsInputCount > 0 ? Color.orange : model.finishedWaitingCount > 0 ? Color.blue.opacity(0.9) : .white.opacity(0.9))
                         .lineLimit(1)
                 }
             }
@@ -321,5 +409,7 @@ private struct WingPills: View {
             .background(shape.fill(Color.black))
             .overlay(shape.strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5))
             .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+            .contentShape(shape)
+            .onTapGesture(perform: onOpen)
     }
 }

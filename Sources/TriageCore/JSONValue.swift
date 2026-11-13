@@ -25,5 +25,17 @@ public enum JSONValue: Codable, Equatable, Sendable {
         }
     }
 
+    /// Plain Foundation object for JSONSerialization.
+    public var foundationObject: Any {
+        switch self {
+        case .null: return NSNull()
+        case .bool(let b): return b
+        case .number(let n): return n
+        case .string(let s): return s
+        case .array(let a): return a.map(\.foundationObject)
+        case .object(let o): return o.mapValues(\.foundationObject)
+        }
+    }
+
     public var stringValue: String? { if case .string(let s) = self { return s } else { return nil } }
 }
