@@ -64,28 +64,10 @@ final class IslandModel {
     var yielding = false
 
     var hasActivity: Bool { !sessions.isEmpty }
-    /// Ticks every few seconds so time-based states (finished sessions aging out) refresh.
-    var clock = Date()
-    static let finishedWaitingWindow: TimeInterval = 30 * 60
-
-    /// Approvals and questions: the agent is blocked on you.
+    /// What the pill calls "waiting": approvals and questions, i.e. an agent blocked on you.
+    /// (Finished sessions awaiting your next prompt deliberately don't count.)
     var needsInputCount: Int { sessions.filter { $0.state == .needsInput }.count }
-    /// Finished and waiting for your next prompt (recent, and not yet looked at).
-    var finishedWaitingCount: Int {
-        sessions.filter { $0.state == .done && !$0.acknowledged
-            && clock.timeIntervalSince($0.lastActivity) < Self.finishedWaitingWindow }.count
-    }
-    /// Everything that wants you, matching what Subspace calls "waiting on you".
-    var waitingCount: Int { needsInputCount + finishedWaitingCount }
-
-    /// Opening the island counts as having looked at finished sessions.
-    func acknowledgeAllFinished() {
-        for i in sessions.indices where sessions[i].state == .done { sessions[i].acknowledged = true }
-    }
-
-    func acknowledge(_ id: UUID) {
-        if let i = sessions.firstIndex(where: { $0.id == id }) { sessions[i].acknowledged = true }
-    }
+    var waitingCount: Int { needsInputCount }
 
     /// The hardware island floats about this far below the top screen edge; we match it.
     static let topInset: CGFloat = 6

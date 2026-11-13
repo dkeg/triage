@@ -13,6 +13,8 @@ final class IslandController {
     private var hoverTask: Task<Void, Never>?
     private var collapseTask: Task<Void, Never>?
     private var openedByAttention = false
+    /// The user moved the pointer onto the open island (as opposed to it opening under a resting cursor).
+    private var pointerEngaged = false
     private(set) var isVisible = true
     private var server: HookServer?
     private let focuser = SessionFocuser()
@@ -27,7 +29,7 @@ final class IslandController {
     private var autoOpen: Bool { defaults.object(forKey: Pref.autoOpenOnAttention) as? Bool ?? true }
     private var holdWhenFocused: Bool { defaults.object(forKey: Pref.holdWhenFocused) as? Bool ?? true }
     private var approvalTimeout: Double { defaults.object(forKey: Pref.approvalTimeout) as? Double ?? 45 }
-    private var autoCollapse: Double { defaults.object(forKey: Pref.autoCollapseSeconds) as? Double ?? 12 }
+    private var autoCollapse: Double { defaults.object(forKey: Pref.autoCollapseSeconds) as? Double ?? 5 }
 
     func start() {
         let panel = IslandPanel()
@@ -60,7 +62,6 @@ final class IslandController {
         discoverSessions()
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.model.clock = Date()
                 self?.discoverSessions()
                 self?.model.pruneDead(isAlive: { kill(pid_t($0), 0) == 0 || errno == EPERM })
             }
@@ -75,7 +76,7 @@ final class IslandController {
         }
         if let c = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.model.mode != .collapsed, self.model.attention == nil else { return }
+                guard let self, self.model.mode != .collapsed else { return }
                 self.openedByAttention = false
                 self.set(.collapsed)
             }
@@ -188,12 +189,13 @@ final class IslandController {
 
     func set(_ mode: IslandMode) {
         guard model.mode != mode else { return }
-        if mode == .expanded { model.acknowledgeAllFinished() }
+        pointerEngaged = false
         model.mode = mode
     }
 
     /// Called after the user approves/denies from the island.
     func resolve(approve: Bool) {
+        TriageLog.write("answered in island: approve=\(approve)")
         model.resolve(approve: approve)
         openedByAttention = false
         scheduleCollapse(after: 0.6)
@@ -201,7 +203,6 @@ final class IslandController {
 
     /// Brings the session's terminal forward and tucks the island away.
     func jump(to session: Session) {
-        model.acknowledge(session.id)
         focuser.focus(session)
         openedByAttention = false
         scheduleCollapse(after: 0.15)
@@ -215,6 +216,7 @@ final class IslandController {
     }
 
     func approveAlways() {
+        TriageLog.write("answered in island: always allow")
         model.resolveAlways()
         openedByAttention = false
         scheduleCollapse(after: 0.6)
@@ -223,6 +225,7 @@ final class IslandController {
     /// "Skip": hand the oldest request back to the terminal's own prompt.
     func skipFirst() {
         guard let id = model.attention?.id else { return }
+        TriageLog.write("answered in island: skip")
         model.release(id: id)
         if model.pending.isEmpty { scheduleCollapse(after: 0.3) }
     }
@@ -245,11 +248,15 @@ final class IslandController {
         collapseTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled, let self else { return }
-            // Never hide the island while a request is waiting on the user.
-            if self.model.attention == nil {
-                self.openedByAttention = false
-                self.set(.collapsed)
+            // Don't fold away under the pointer; otherwise collapse. A pending request keeps
+            // flashing red in the pill, so it can't be missed.
+            if self.model.mode == .expanded, self.pointerEngaged,
+               self.model.hoverHit(NSEvent.mouseLocation, in: self.currentRect, slack: 8) {
+                self.scheduleCollapse(after: 1.0)
+                return
             }
+            self.openedByAttention = false
+            self.set(.collapsed)
         }
     }
 
@@ -283,6 +290,7 @@ final class IslandController {
         let inside = model.size != .zero
             && model.hoverHit(NSEvent.mouseLocation, in: currentRect, slack: slack)
         if inside {
+            if model.mode == .expanded { pointerEngaged = true }
             collapseTask?.cancel()
             guard hoverOpen, model.mode == .collapsed, hoverTask == nil else { return }
             hoverTask = Task { [weak self] in

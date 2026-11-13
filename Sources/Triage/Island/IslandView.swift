@@ -116,15 +116,12 @@ struct IslandView: View {
     }
 }
 
-/// Orange (pulsing) when something is blocked on you, blue when a session has finished and is
-/// waiting for your next prompt, green otherwise.
+/// Orange and pulsing when something is blocked on you, green otherwise.
 private struct StatusDot: View {
     let model: IslandModel
     @State private var dim = false
 
-    private var color: Color {
-        model.needsInputCount > 0 ? .orange : model.finishedWaitingCount > 0 ? .blue : .green
-    }
+    private var color: Color { model.pending.count > 0 ? .red : model.needsInputCount > 0 ? .orange : .green }
 
     var body: some View {
         Circle().fill(color).frame(width: 7, height: 7)
@@ -137,7 +134,8 @@ private struct StatusDot: View {
 
 /// "2 waiting" / "All clear"
 @MainActor private func waitingText(_ model: IslandModel) -> String {
-    model.waitingCount > 0 ? "\(model.waitingCount) waiting" : "All clear"
+    if model.pending.count > 0 { return "\(model.pending.count) pending" }
+    return model.waitingCount > 0 ? "\(model.waitingCount) waiting" : "All clear"
 }
 
 private struct CollapsedContent: View {
@@ -149,7 +147,7 @@ private struct CollapsedContent: View {
                 StatusDot(model: model)
                 Text(waitingText(model))
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(model.needsInputCount > 0 ? Color.orange : model.finishedWaitingCount > 0 ? Color.blue.opacity(0.9) : .white.opacity(0.9))
+                    .foregroundStyle(model.pending.count > 0 ? Color.red : model.needsInputCount > 0 ? Color.orange : .white.opacity(0.9))
                     .lineLimit(1)
             }
             .frame(width: IslandModel.wing, alignment: .center)
@@ -382,17 +380,17 @@ private struct WingPills: View {
     var body: some View {
                 let working = model.sessions.filter { $0.state == .running }.count
         HStack(spacing: 0) {
-            pill {
+            pill(flashing: model.pending.count > 0) {
                 HStack(spacing: 7) {
                     StatusDot(model: model)
                     Text(waitingText(model))
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(model.needsInputCount > 0 ? Color.orange : model.finishedWaitingCount > 0 ? Color.blue.opacity(0.9) : .white.opacity(0.9))
+                        .foregroundStyle(model.pending.count > 0 ? Color.red : model.needsInputCount > 0 ? Color.orange : .white.opacity(0.9))
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 0).frame(width: model.centerReserve)
-            pill {
+            pill(flashing: false) {
                 Text("\(working) working")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.6))
@@ -402,14 +400,39 @@ private struct WingPills: View {
         }
     }
 
-    private func pill<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+    private func pill<C: View>(flashing: Bool, @ViewBuilder _ content: () -> C) -> some View {
+        FlashingPill(width: IslandModel.wing, height: model.bandHeight, flashing: flashing, onOpen: onOpen, content: content())
+    }
+}
+
+/// One wing pill. While `flashing` it pulses red (a request is waiting on you); otherwise it
+/// has the system island's plain thin rim.
+private struct FlashingPill<C: View>: View {
+    let width: CGFloat
+    let height: CGFloat
+    let flashing: Bool
+    let onOpen: () -> Void
+    let content: C
+    @State private var on = false
+
+    var body: some View {
         let shape = Capsule(style: .continuous)
-        return content()
-            .frame(width: IslandModel.wing, height: model.bandHeight)
+        content
+            .frame(width: width, height: height)
             .background(shape.fill(Color.black))
-            .overlay(shape.strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5))
-            .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+            .background(shape.fill(Color.red.opacity(flashing ? (on ? 0.35 : 0.05) : 0)))
+            .overlay(shape.strokeBorder(flashing ? Color.red.opacity(on ? 0.95 : 0.35) : Color.white.opacity(0.2),
+                                        lineWidth: flashing ? 2 : 1.5))
+            .shadow(color: flashing ? Color.red.opacity(on ? 0.6 : 0.1) : .black.opacity(0.35), radius: flashing ? 10 : 8, y: 3)
             .contentShape(shape)
             .onTapGesture(perform: onOpen)
+            .onAppear { restart() }
+            .onChange(of: flashing) { _, _ in restart() }
+    }
+
+    private func restart() {
+        on = false
+        guard flashing else { return }
+        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { on = true }
     }
 }

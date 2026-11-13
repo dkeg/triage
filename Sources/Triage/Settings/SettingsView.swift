@@ -7,7 +7,7 @@ struct SettingsView: View {
     @AppStorage(Pref.hoverDelay) private var hoverDelay = 0.5
     @AppStorage(Pref.approvalTimeout) private var approvalTimeout = 45.0
     @AppStorage(Pref.autoOpenOnAttention) private var autoOpen = true
-    @AppStorage(Pref.autoCollapseSeconds) private var autoCollapse = 12.0
+    @AppStorage(Pref.autoCollapseSeconds) private var autoCollapse = 5.0
     @AppStorage(Pref.holdWhenFocused) private var holdWhenFocused = true
     @AppStorage(Pref.pillWidth) private var pillWidth = PillWidthMode.wide.rawValue
     @AppStorage(Pref.rimStyle) private var rimStyle = RimStyle.wingsOnly.rawValue

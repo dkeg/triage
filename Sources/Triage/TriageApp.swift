@@ -45,6 +45,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             IslandController.shared.start()
             offerLaunchAtLogin()
+            // Dev hook: a pending request that stays collapsed (shows the flashing pill).
+            if CommandLine.arguments.contains("--demo-pending") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1))
+                    IslandController.shared.model.simulateAttention()
+                }
+            }
             // Dev hooks: `open build/Triage.app --args --demo-attention` / `--open-settings`
             if CommandLine.arguments.contains("--open-settings") {
                 Task { @MainActor in

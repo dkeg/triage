@@ -193,33 +193,6 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(m.sessions.count, 1)
     }
 
-    func testFinishedSessionCountsAsWaitingUntilAcknowledgedOrStale() {
-        let m = IslandModel()
-        m.apply(event("Stop", #","last_assistant_message":"done""#))
-        XCTAssertEqual(m.needsInputCount, 0)
-        XCTAssertEqual(m.finishedWaitingCount, 1)
-        XCTAssertEqual(m.waitingCount, 1)
-        m.clock = Date().addingTimeInterval(IslandModel.finishedWaitingWindow + 5)   // ages out
-        XCTAssertEqual(m.waitingCount, 0)
-        m.clock = Date()
-        XCTAssertEqual(m.waitingCount, 1)
-        m.acknowledge(m.sessions[0].id)                                              // user looked at it
-        XCTAssertEqual(m.waitingCount, 0)
-        m.apply(event("Stop"))                                                       // finishes again: counts again
-        XCTAssertEqual(m.waitingCount, 1)
-        m.apply(event("UserPromptSubmit", #","prompt":"next""#))                   // you replied
-        XCTAssertEqual(m.waitingCount, 0)
-    }
-
-    func testApprovalsAndFinishedBothCount() {
-        let m = IslandModel()
-        m.apply(event("Stop", session: "a"))
-        m.addPermission(event("PermissionRequest", session: "b", #","tool_name":"Bash""#)) { _ in }
-        XCTAssertEqual(m.needsInputCount, 1)
-        XCTAssertEqual(m.finishedWaitingCount, 1)
-        XCTAssertEqual(m.waitingCount, 2)
-    }
-
     func testApprovingInTheAppClearsTheStuckRequestWhenTheToolFinishes() {
         let m = IslandModel()
         var closed = false
@@ -257,12 +230,15 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertTrue(m.pending.isEmpty)
     }
 
-    func testOpeningTheIslandMarksFinishedSessionsSeen() {
+    func testOnlyApprovalsAndQuestionsCountAsWaiting() {
         let m = IslandModel()
-        m.apply(event("Stop", session: "a"))
-        m.apply(event("Stop", session: "b"))
-        XCTAssertEqual(m.waitingCount, 2)
-        m.acknowledgeAllFinished()
+        m.apply(event("Stop", session: "done", #","last_assistant_message":"finished""#))          // finished, awaiting a prompt
         XCTAssertEqual(m.waitingCount, 0)
+        m.addPermission(event("PermissionRequest", session: "ask", #","tool_name":"Bash""#)) { _ in }
+        XCTAssertEqual(m.waitingCount, 1)                                                           // approval
+        m.apply(event("Notification", session: "q", #","notification_type":"elicitation_dialog","message":"Pick one""#))
+        XCTAssertEqual(m.waitingCount, 2)                                                           // question
+        m.apply(event("Notification", session: "idle", #","notification_type":"idle_prompt""#))
+        XCTAssertEqual(m.waitingCount, 2)                                                           // idle prompt does not count
     }
 }

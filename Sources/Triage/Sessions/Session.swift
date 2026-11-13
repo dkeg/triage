@@ -58,8 +58,6 @@ struct Session: Identifiable, Equatable {
     var hostBundleID: String?
     /// When the current turn started (set at the prompt, cleared when it finishes).
     var turnStartedAt: Date?
-    /// The user has looked at this finished session (clicked it), so it no longer counts as waiting.
-    var acknowledged = false
 
     /// The agent process (Claude Code) this session belongs to, from the hook's ancestor chain.
     var agentPID: Int? { meta?.chain?.first(where: { $0.name == "claude" })?.pid }

@@ -64,7 +64,6 @@ extension IslandModel {
             sessions[i].detail = e.source == "resume" ? "Resumed" : "Started"
         case "UserPromptSubmit":
             sessions[i].state = .running
-            sessions[i].acknowledged = false
             sessions[i].turnStartedAt = Date()
             sessions[i].detail = snippet(e.prompt)
         case "PreToolUse":
@@ -92,7 +91,6 @@ extension IslandModel {
             if !pending.contains(where: { $0.sessionID == sessions[i].id }) { sessions[i].state = .running }
         case "Stop":
             sessions[i].state = .done
-            sessions[i].acknowledged = false
             sessions[i].turnStartedAt = nil
             sessions[i].detail = snippet(e.lastAssistantMessage).isEmpty ? "Finished" : snippet(e.lastAssistantMessage)
         default:
