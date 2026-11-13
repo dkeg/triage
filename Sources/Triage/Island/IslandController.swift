@@ -16,6 +16,10 @@ final class IslandController {
     private(set) var isVisible = true
     private var server: HookServer?
     private let focuser = SessionFocuser()
+    private(set) lazy var probe = SystemIslandProbe(model: model)
+    private var pillWidthMode: PillWidthMode {
+        PillWidthMode(rawValue: defaults.string(forKey: Pref.pillWidth) ?? "") ?? .wide
+    }
 
     private var defaults: UserDefaults { .standard }
     private var hoverOpen: Bool { defaults.object(forKey: Pref.hoverOpen) as? Bool ?? true }
@@ -46,6 +50,11 @@ final class IslandController {
             MainActor.assumeIsolated { self?.reposition() }
         }
         startServer()
+        applyPillWidthMode()
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyPillWidthMode() }
+        }
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
@@ -68,6 +77,14 @@ final class IslandController {
         if let l = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved, handler: { e in handler(e); return e }) {
             monitors.append(l)
         }
+    }
+
+    /// Applies the width setting and runs the system-island probe only in Auto.
+    func applyPillWidthMode() {
+        let mode = pillWidthMode
+        guard mode != model.pillWidthMode || (mode == .auto) != (probe.status != .idle) else { return }
+        model.pillWidthMode = mode
+        if mode == .auto { probe.start() } else { probe.stop() }
     }
 
     // MARK: Hook server

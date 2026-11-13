@@ -24,6 +24,7 @@ struct IslandView: View {
         .padding(.top, IslandModel.topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: model.mode)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: model.centerReserve)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: model.pending.count)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: model.sessions)
         .ignoresSafeArea()
@@ -78,7 +79,7 @@ private struct CollapsedContent: View {
                     .lineLimit(1)
             }
             .frame(width: IslandModel.wing, alignment: .center)
-            Spacer(minLength: 0).frame(width: IslandModel.centerReserve)
+            Spacer(minLength: 0).frame(width: model.centerReserve)
             Text("\(working) working")
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.6))

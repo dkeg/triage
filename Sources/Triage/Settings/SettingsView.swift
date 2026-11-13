@@ -8,6 +8,8 @@ struct SettingsView: View {
     @AppStorage(Pref.autoOpenOnAttention) private var autoOpen = true
     @AppStorage(Pref.autoCollapseSeconds) private var autoCollapse = 12.0
     @AppStorage(Pref.holdWhenFocused) private var holdWhenFocused = true
+    @AppStorage(Pref.pillWidth) private var pillWidth = PillWidthMode.wide.rawValue
+    @State private var screenAccess = SystemIslandProbe.hasPermission
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
     @State private var hookError: String?
@@ -28,6 +30,32 @@ struct SettingsView: View {
                     Slider(value: $autoCollapse, in: 3...60, step: 1) { Text("") }.frame(width: 160)
                     Text("\(Int(autoCollapse))s").monospacedDigit().frame(width: 48)
                 }.disabled(!autoOpen)
+            }
+            Section("Appearance") {
+                Picker("Collapsed width", selection: $pillWidth) {
+                    ForEach(PillWidthMode.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                Group {
+                    switch PillWidthMode(rawValue: pillWidth) ?? .wide {
+                    case .compact: Text("Hugs the hardware island. Status text can sit under the system island while it shows a Live Activity.")
+                    case .wide: Text("Fixed width that clears a system Live Activity such as Music or a timer.")
+                    case .auto: Text("Widens only when the system island does, and steps aside while Spotlight or Siri is open. Triage reads a thin strip of the screen to measure the island's width; nothing is stored or sent.")
+                    }
+                }.font(.caption).foregroundStyle(.secondary)
+                if pillWidth == PillWidthMode.auto.rawValue && !screenAccess {
+                    HStack {
+                        Text("Needs Screen Recording access").foregroundStyle(.orange)
+                        Spacer()
+                        Button("Grant…") {
+                            if !CGRequestScreenCaptureAccess() {
+                                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                            }
+                            screenAccess = SystemIslandProbe.hasPermission
+                        }
+                    }
+                    Text("Until it's granted, Auto behaves like Wide. After granting, re-select Auto or relaunch Triage.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("Claude Code") {
                 LabeledContent("Hooks") {
@@ -50,8 +78,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { hooksInstalled = HookInstaller.isInstalled() }
-        .frame(width: 460, height: 520)
+        .onAppear { hooksInstalled = HookInstaller.isInstalled(); screenAccess = SystemIslandProbe.hasPermission }
+        .frame(width: 460, height: 640)
     }
 
     private func install() {

@@ -4,6 +4,24 @@ import TriageCore
 
 enum IslandMode: Equatable { case collapsed, peek, expanded }
 
+/// How wide the collapsed pill is.
+enum PillWidthMode: String, CaseIterable, Identifiable {
+    /// Hugs the hardware island.
+    case compact
+    /// Fixed width that clears a system Live Activity (recommended).
+    case wide
+    /// Follows the system island's real width (needs Screen Recording).
+    case auto
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .compact: "Compact"
+        case .wide: "Wide (recommended)"
+        case .auto: "Auto"
+        }
+    }
+}
+
 @MainActor @Observable
 final class IslandModel {
     var mode: IslandMode = .collapsed
@@ -13,15 +31,33 @@ final class IslandModel {
     var attention: AttentionRequest? { pending.first }
     var geometry: IslandGeometry = .init(cutout: .zero, screenFrame: .zero, isPhysical: false)
 
+    var pillWidthMode: PillWidthMode = .wide
+    /// System island width measured by the probe (Auto mode), in points.
+    var measuredIslandWidth: CGFloat?
+    /// The system island is showing something large (Spotlight/Siri): hide the pill meanwhile.
+    var yielding = false
+
     var hasActivity: Bool { !sessions.isEmpty }
     var needsInputCount: Int { sessions.filter { $0.state == .needsInput }.count }
 
     /// The hardware island floats about this far below the top screen edge; we match it.
     static let topInset: CGFloat = 4
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
-    static let centerReserve: CGFloat = 150
+    static let wideReserve: CGFloat = 150
     static let wing: CGFloat = 80
     static let expandedWidth: CGFloat = 620
+
+    /// Width kept clear in the middle for the system island.
+    var centerReserve: CGFloat {
+        let hardware = geometry.cutout.width + 10
+        switch pillWidthMode {
+        case .compact: return hardware
+        case .wide: return Self.wideReserve
+        case .auto:
+            guard let m = measuredIslandWidth else { return Self.wideReserve }   // no reading: be safe
+            return max(hardware, m + 16)
+        }
+    }
 
     /// Height of the band that lines up with the hardware island.
     var bandHeight: CGFloat { max(geometry.cutout.height - Self.topInset + 2, 30) }
@@ -29,10 +65,10 @@ final class IslandModel {
     /// Floating pill size for the current mode. Origin is Self.topInset below the screen top.
     var size: CGSize {
         let band = bandHeight
-        let wide = Self.centerReserve + Self.wing * 2
+        let wide = centerReserve + Self.wing * 2
         switch mode {
         case .collapsed:
-            return hasActivity ? CGSize(width: wide, height: band) : .zero
+            return hasActivity && !yielding ? CGSize(width: wide, height: band) : .zero
         case .peek:
             return CGSize(width: wide, height: band + 36)
         case .expanded:

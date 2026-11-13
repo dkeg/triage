@@ -6,4 +6,5 @@ enum Pref {
     static let autoOpenOnAttention = "autoOpenOnAttention"
     static let autoCollapseSeconds = "autoCollapseSeconds"
     static let holdWhenFocused = "holdWhenFocused"
+    static let pillWidth = "pillWidth"
 }
