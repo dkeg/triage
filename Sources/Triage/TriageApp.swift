@@ -1,4 +1,5 @@
 import SwiftUI
+import TriageCore
 import ServiceManagement
 
 @main
@@ -22,6 +23,28 @@ struct TriageApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// One-time offer. Without Triage running, hooks do nothing and Claude shows its normal
     /// prompts, so starting at login is what makes approvals in the island dependable.
+    /// One-time offer to add the Claude Code hooks, so a fresh install (e.g. from Homebrew) works.
+    private func offerHookSetup() {
+        let key = "hookSetupOffered"
+        guard !UserDefaults.standard.bool(forKey: key),
+              Bundle.main.bundleURL.pathExtension == "app",
+              !HookInstaller.isInstalled() else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Connect triage to Claude Code?"
+        alert.informativeText = "triage shows your Claude Code sessions and permission requests by adding hook entries to ~/.claude/settings.json. Your existing hooks are left alone and a backup is saved next to the file. You can do this later in Settings."
+        alert.addButton(withTitle: "Connect")
+        alert.addButton(withTitle: "Not Now")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do { try HookSetup.installFromBundle() } catch {
+            let failed = NSAlert()
+            failed.messageText = "Couldn't connect to Claude Code"
+            failed.informativeText = error.localizedDescription
+            failed.runModal()
+        }
+    }
+
     private func offerLaunchAtLogin() {
         let key = "launchAtLoginOffered"
         guard !UserDefaults.standard.bool(forKey: key),
@@ -44,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         MainActor.assumeIsolated {
             IslandController.shared.start()
+            offerHookSetup()
             offerLaunchAtLogin()
             // Dev hook: a pending request that stays collapsed (shows the flashing pill).
             if CommandLine.arguments.contains("--demo-pending") {

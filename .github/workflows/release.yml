@@ -1,0 +1,76 @@
+name: Release
+
+# Push a tag like v0.1.0 (it must match the VERSION file) to build, sign, notarize and publish.
+#
+# Required repository secrets:
+#   MACOS_CERT_P12_BASE64     Developer ID Application certificate + key, exported as .p12, base64
+#   MACOS_CERT_PASSWORD       password of that .p12
+#   NOTARY_API_KEY_BASE64     App Store Connect API key (.p8), base64
+#   NOTARY_API_KEY_ID         its key id
+#   NOTARY_API_ISSUER_ID      its issuer id
+#   TAP_GITHUB_TOKEN          a token with write access to dkeg/homebrew-triage (updates the cask)
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match VERSION
+        run: test "v$(tr -d '[:space:]' < VERSION)" = "${GITHUB_REF_NAME}"
+
+      - name: Import signing certificate
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+
+      - name: Test
+        run: swift test
+
+      - name: Build, sign and notarize
+        env:
+          NOTARY_API_KEY_BASE64: ${{ secrets.NOTARY_API_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          echo "$NOTARY_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          export NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          scripts/release.sh
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/Triage-*.zip dist/Triage-*.zip.sha256 \
+            --title "triage $GITHUB_REF_NAME" --generate-notes
+
+      - name: Update Homebrew cask
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          SHA="$(cat dist/Triage-${VERSION}.zip.sha256)"
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/dkeg/homebrew-triage.git" "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/; s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" Casks/triage.rb
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "triage ${VERSION}"
+          git push

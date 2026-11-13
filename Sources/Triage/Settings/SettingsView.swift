@@ -109,13 +109,7 @@ struct SettingsView: View {
 
     private func install() {
         do {
-            guard let exe = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("triage-hook"),
-                  FileManager.default.isExecutableFile(atPath: exe.path) else {
-                throw NSError(domain: "Triage", code: 2,
-                              userInfo: [NSLocalizedDescriptionKey: "triage-hook helper not found next to the app executable"])
-            }
-            let helper = try HookInstaller.installHelper(from: exe)
-            try HookInstaller.install(helper: helper)
+            try HookSetup.installFromBundle()
             hookError = nil
         } catch { hookError = error.localizedDescription }
         hooksInstalled = HookInstaller.isInstalled()
