@@ -18,7 +18,7 @@ final class GeometryTests: XCTestCase {
         m.sessions = IslandModel.mockSessions()
         let collapsed = m.size
         m.mode = .expanded
-        XCTAssertEqual(collapsed.height, 38) // matches the hardware island band
+        XCTAssertEqual(collapsed.height, 36) // matches the hardware island band
         XCTAssertGreaterThan(m.size.width, collapsed.width)
         XCTAssertGreaterThan(m.size.height, collapsed.height)
     }

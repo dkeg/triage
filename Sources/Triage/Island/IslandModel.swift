@@ -67,7 +67,7 @@ final class IslandModel {
     var needsInputCount: Int { sessions.filter { $0.state == .needsInput }.count }
 
     /// The hardware island floats about this far below the top screen edge; we match it.
-    static let topInset: CGFloat = 4
+    static let topInset: CGFloat = 5
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let wideReserve: CGFloat = 150
     static let wing: CGFloat = 80
@@ -95,7 +95,7 @@ final class IslandModel {
     }
 
     /// Height of the band that lines up with the hardware island.
-    var bandHeight: CGFloat { max(geometry.cutout.height - Self.topInset + 2, 30) }
+    var bandHeight: CGFloat { max(geometry.cutout.height - Self.topInset + 1, 30) }
 
     /// Floating pill size for the current mode. Origin is Self.topInset below the screen top.
     var size: CGSize {
