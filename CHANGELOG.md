@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Releases are fully automated: pushing a tag builds, notarizes, publishes and updates the cask.
+
 ## 0.1.1
 
 - Release is now built, signed and notarized by GitHub Actions.
