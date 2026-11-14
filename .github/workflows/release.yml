@@ -52,6 +52,7 @@ jobs:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          REQUIRE_NOTARIZATION: "1"
         run: scripts/release.sh
 
       - name: Publish GitHub release
@@ -66,9 +67,13 @@ jobs:
           TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
           VERSION="$(tr -d '[:space:]' < VERSION)"
-          SHA="$(cat dist/Triage-${VERSION}.zip.sha256)"
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/dkeg/homebrew-triage.git" "$RUNNER_TEMP/tap"
+          SHA="$(tr -d '[:space:]' < dist/Triage-${VERSION}.zip.sha256)"
+          TAP_TOKEN="$(printf '%s' "$TAP_TOKEN" | tr -d '[:space:]')"      # tolerate stray whitespace from pasting
+          [ -n "$TAP_TOKEN" ] || { echo "TAP_GITHUB_TOKEN is empty" >&2; exit 1; }
+          AUTH="$(printf 'x-access-token:%s' "$TAP_TOKEN" | base64)"
+          git -c http.extraheader="AUTHORIZATION: basic ${AUTH}" clone "https://github.com/dkeg/homebrew-triage.git" "$RUNNER_TEMP/tap"
           cd "$RUNNER_TEMP/tap"
+          git config http.extraheader "AUTHORIZATION: basic ${AUTH}"
           sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/; s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" Casks/triage.rb
           git config user.name "github-actions"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -5,6 +5,7 @@
 #
 # Signing:      SIGN_IDENTITY="Developer ID Application: Name (TEAMID)"  (auto-detected if unset)
 # Notarization (skipped if none of these are set; the zip is then NOT distributable):
+#   REQUIRE_NOTARIZATION=1                            fail instead of warning when notarization does not happen
 #   NOTARY_PROFILE                                    a keychain profile from `xcrun notarytool store-credentials`
 #   or NOTARY_APPLE_ID + NOTARY_PASSWORD + NOTARY_TEAM_ID   Apple ID, app-specific password, team id (CI)
 #   or NOTARY_KEY_PATH + NOTARY_KEY_ID + NOTARY_ISSUER_ID   an App Store Connect API key
@@ -47,7 +48,9 @@ if notarize "$ZIP"; then
   spctl -a -vv -t exec "$APP"
   echo "Notarized."
 else
-  echo "WARNING: not notarized (no notary credentials set). Gatekeeper will block this build on other Macs." >&2
+  echo "WARNING: not notarized (missing or rejected notary credentials). Gatekeeper will block this build on other Macs." >&2
+  # CI sets REQUIRE_NOTARIZATION=1 so a build that can't be notarized is never published.
+  if [ "${REQUIRE_NOTARIZATION:-0}" = "1" ]; then echo "REQUIRE_NOTARIZATION=1: refusing to continue." >&2; exit 1; fi
 fi
 
 shasum -a 256 "$ZIP" | awk '{print $1}' > "$ZIP.sha256"
