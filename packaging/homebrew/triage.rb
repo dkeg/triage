@@ -7,7 +7,7 @@ cask "triage" do
   desc "Dynamic Island status and approvals for Claude Code sessions"
   homepage "https://github.com/dkeg/triage"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "Triage.app"
   # `triage-hook install | uninstall | status` manages the Claude Code hooks from a terminal.
