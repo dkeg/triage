@@ -7,9 +7,9 @@ name: Release
 # Required repository secrets:
 #   MACOS_CERT_P12_BASE64     Developer ID Application certificate + key, exported as .p12, base64
 #   MACOS_CERT_PASSWORD       password of that .p12
-#   NOTARY_API_KEY_BASE64     App Store Connect API key (.p8), base64
-#   NOTARY_API_KEY_ID         its key id
-#   NOTARY_API_ISSUER_ID      its issuer id
+#   NOTARY_APPLE_ID           Apple ID email used for notarization
+#   NOTARY_PASSWORD           an app-specific password for that Apple ID (appleid.apple.com)
+#   NOTARY_TEAM_ID            the Developer team id (Y8W7627T7W)
 #   TAP_GITHUB_TOKEN          a token with write access to dkeg/homebrew-triage (updates the cask)
 
 on:
@@ -49,13 +49,10 @@ jobs:
 
       - name: Build, sign and notarize
         env:
-          NOTARY_API_KEY_BASE64: ${{ secrets.NOTARY_API_KEY_BASE64 }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
-        run: |
-          echo "$NOTARY_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
-          export NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
-          scripts/release.sh
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: scripts/release.sh
 
       - name: Publish GitHub release
         env:
