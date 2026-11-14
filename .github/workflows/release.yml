@@ -68,15 +68,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$RELEASE_TAG" dist/Triage-*.zip dist/Triage-*.zip.sha256 \
-            --title "triage $RELEASE_TAG" --generate-notes
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; leaving its assets untouched."
+          else
+            gh release create "$RELEASE_TAG" dist/Triage-*.zip dist/Triage-*.zip.sha256 \
+              --title "triage $RELEASE_TAG" --generate-notes
+          fi
 
       - name: Update Homebrew cask
         env:
           TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="$(tr -d '[:space:]' < VERSION)"
-          SHA="$(tr -d '[:space:]' < dist/Triage-${VERSION}.zip.sha256)"
+          # Checksum of what users actually download (the published asset), not of this build.
+          mkdir -p "$RUNNER_TEMP/asset"
+          gh release download "$RELEASE_TAG" --pattern "Triage-${VERSION}.zip" --dir "$RUNNER_TEMP/asset" --clobber
+          SHA="$(shasum -a 256 "$RUNNER_TEMP/asset/Triage-${VERSION}.zip" | awk '{print $1}')"
           TAP_TOKEN="$(printf '%s' "$TAP_TOKEN" | tr -d '[:space:]')"      # tolerate stray whitespace from pasting
           [ -n "$TAP_TOKEN" ] || { echo "TAP_GITHUB_TOKEN is empty" >&2; exit 1; }
           AUTH="$(printf 'x-access-token:%s' "$TAP_TOKEN" | base64)"
@@ -84,6 +92,7 @@ jobs:
           cd "$RUNNER_TEMP/tap"
           git config http.extraheader "AUTHORIZATION: basic ${AUTH}"
           sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/; s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" Casks/triage.rb
+          if git diff --quiet; then echo "Cask already at ${VERSION} (${SHA})"; exit 0; fi
           git config user.name "github-actions"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "triage ${VERSION}"
