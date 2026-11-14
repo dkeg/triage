@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Release is now built, signed and notarized by GitHub Actions.
+- App icon.
+- Screen Recording request is asked once, with clearer guidance if macOS doesn't list the app.
+
 ## 0.1.0
 
 First release.
