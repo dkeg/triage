@@ -43,7 +43,15 @@ notarize() {
 ditto -c -k --keepParent "$APP" "$ZIP"
 if notarize "$ZIP"; then
   echo "==> Stapling"
-  xcrun stapler staple "$APP"
+  # The ticket can take a moment to be available after acceptance, and Apple's CDN occasionally
+  # drops the connection; retry before giving up.
+  stapled=0
+  for attempt in 1 2 3 4 5 6; do
+    if xcrun stapler staple "$APP"; then stapled=1; break; fi
+    echo "stapling attempt $attempt failed; retrying in 20s" >&2
+    sleep 20
+  done
+  [ "$stapled" = "1" ] || { echo "Could not staple the notarization ticket" >&2; exit 1; }
   ditto -c -k --keepParent "$APP" "$ZIP"      # re-zip with the ticket stapled in
   spctl -a -vv -t exec "$APP"
   echo "Notarized."
