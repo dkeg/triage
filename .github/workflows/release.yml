@@ -1,6 +1,8 @@
 name: Release
 
-# Push a tag like v0.1.0 (it must match the VERSION file) to build, sign, notarize and publish.
+# Automated releases. Until the secrets below are set this workflow is manual-only
+# (Actions > Release > Run workflow); v0.1.0 was built and notarized locally with scripts/release.sh.
+# To switch to tag-triggered releases, add the secrets and uncomment the push trigger.
 #
 # Required repository secrets:
 #   MACOS_CERT_P12_BASE64     Developer ID Application certificate + key, exported as .p12, base64
@@ -11,8 +13,9 @@ name: Release
 #   TAP_GITHUB_TOKEN          a token with write access to dkeg/homebrew-triage (updates the cask)
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+  # push:
+  #   tags: ["v*"]
 
 permissions:
   contents: write
@@ -23,8 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Tag must match VERSION
-        run: test "v$(tr -d '[:space:]' < VERSION)" = "${GITHUB_REF_NAME}"
+      - name: Release tag is v<VERSION>
+        run: echo "RELEASE_TAG=v$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
 
       - name: Import signing certificate
         env:
@@ -58,8 +61,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/Triage-*.zip dist/Triage-*.zip.sha256 \
-            --title "triage $GITHUB_REF_NAME" --generate-notes
+          gh release create "$RELEASE_TAG" dist/Triage-*.zip dist/Triage-*.zip.sha256 \
+            --title "triage $RELEASE_TAG" --generate-notes
 
       - name: Update Homebrew cask
         env:
