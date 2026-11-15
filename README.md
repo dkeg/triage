@@ -1,5 +1,10 @@
 # triage
 
+<p align="center">
+  <img src="docs/media/triage-demo.gif" alt="triage showing a permission request next to the Dynamic Island, approving it, then listing agent sessions and running terminals" width="720">
+</p>
+<p align="center"><sub>A permission request opens next to the island, one click approves it, and the card lists your agent sessions and running terminals. <a href="docs/media/triage-demo.mp4">Sharper MP4</a>. The sessions shown are made up.</sub></p>
+
 A menu-bar app that shows your **AI coding agent** sessions around the MacBook Pro's Dynamic Island,
 and lets you approve or deny permission requests from there. Claude Code is supported out of the
 box; any other agent can use it by sending a small hook event ([see below](#using-triage-with-other-agents)).
@@ -145,6 +150,11 @@ Release builds (universal, hardened runtime, notarized):
 ```
 SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=… scripts/release.sh
 ```
+
+Recording the animation above: `scripts/demo/record.sh` plays a scripted story with fake sessions
+(`Sources/Triage/Demo/DemoStory.swift`) on a plain stage and converts it to MP4, WebM and GIF. It needs
+`ffmpeg` and takes about 25 seconds; leave the mouse alone while it runs. Re-run it after UI changes and
+copy the results to `docs/media/`.
 
 Developer flags: `--demo-attention`, `--demo-pending`, `--open-settings`. The debug log is at
 `~/Library/Logs/Triage/triage.log`.

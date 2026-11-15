@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Scripted demo mode and a recording script for the website/README animation (`--demo-story`; does nothing
+  unless passed).
+
 ## 0.2.0
 
 **New**

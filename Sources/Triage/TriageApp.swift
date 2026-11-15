@@ -21,6 +21,9 @@ struct TriageApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Kept alive for the duration of a `--demo-story` run.
+    private var demoStory: AnyObject?
+
     /// One-time offer. Without Triage running, hooks do nothing and Claude shows its normal
     /// prompts, so starting at login is what makes approvals in the island dependable.
     /// One-time offer to add the Claude Code hooks, so a fresh install (e.g. from Homebrew) works.
@@ -92,8 +95,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        if DemoStory.isEnabled { MainActor.assumeIsolated { DemoStory.installOverrides() } }
         MainActor.assumeIsolated {
             IslandController.shared.start()
+            if DemoStory.isEnabled {
+                let story = DemoStory(controller: IslandController.shared)
+                demoStory = story
+                Task { @MainActor in await story.run() }
+                return
+            }
             offerHookSetup()
             offerHookReconnect()
             offerLaunchAtLogin()

@@ -66,6 +66,7 @@ final class TerminalMonitor {
     }
 
     func scan() {
+        guard !DemoStory.isEnabled else { return }              // the recorded demo must never show real terminals
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: Pref.showTerminals) as? Bool ?? true else {
             if !model.terminals.isEmpty { model.terminals = [] }

@@ -59,19 +59,26 @@ final class IslandController {
                                                object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.reposition() }
         }
-        startServer()
-        discoverSessions()
-        terminalMonitor.start()
-        Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.discoverSessions()
-                self?.model.pruneDead(isAlive: { kill(pid_t($0), 0) == 0 || errno == EPERM })
+        if DemoStory.isEnabled {
+            // Recording mode: no real sessions, terminals, hook server or screen probe.
+            applyPillPrefs()
+            model.pillWidthMode = .auto
+            model.measuredIslandWidth = 58
+        } else {
+            startServer()
+            discoverSessions()
+            terminalMonitor.start()
+            Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.discoverSessions()
+                    self?.model.pruneDead(isAlive: { kill(pid_t($0), 0) == 0 || errno == EPERM })
+                }
             }
-        }
-        applyPillWidthMode()
-        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
-                                               object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyPillWidthMode() }
+            applyPillWidthMode()
+            NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
+                                                   object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.applyPillWidthMode() }
+            }
         }
         let handler: (NSEvent) -> Void = { [weak self] _ in
             MainActor.assumeIsolated { self?.mouseMoved() }
@@ -182,6 +189,7 @@ final class IslandController {
 
     /// Finds running Claude Code processes so they show up before their first hook event.
     func discoverSessions() {
+        guard !DemoStory.isEnabled else { return }
         let all = ProcessTree.pids(named: "claude")
         let agents: [(pid: Int, cwd: String?, chain: [ProcRef], tty: String?)] = all.compactMap { pid in
             // Skip helpers spawned by another claude process (e.g. `claude mcp ...`).
