@@ -24,9 +24,55 @@ struct SettingsView: View {
     @State private var hooksInstalled = HookInstaller.isInstalled()
     @State private var hookError: String?
 
+    private enum Tab: String { case general, behavior, pill, sessions }
+    /// `--settings-tab=pill` (dev flag) opens a specific tab.
+    @State private var tab: Tab = CommandLine.arguments.compactMap { a -> Tab? in
+        a.hasPrefix("--settings-tab=") ? Tab(rawValue: String(a.dropFirst("--settings-tab=".count))) : nil
+    }.first ?? .general
+
     var body: some View {
+        TabView(selection: $tab) {
+            generalTab
+                .tabItem { Label("General", systemImage: "gearshape") }.tag(Tab.general)
+            behaviorTab
+                .tabItem { Label("Behavior", systemImage: "cursorarrow.click.2") }.tag(Tab.behavior)
+            pillTab
+                .tabItem { Label("Pill", systemImage: "capsule") }.tag(Tab.pill)
+            sessionsTab
+                .tabItem { Label("Sessions", systemImage: "list.bullet.rectangle") }.tag(Tab.sessions)
+        }
+        .onAppear { hooksInstalled = HookInstaller.isInstalled(); screenAccess = SystemIslandProbe.hasPermission }
+        .frame(width: 520, height: 560)
+    }
+
+    private var generalTab: some View {
         Form {
-            Section("Opening") {
+            Section("General") {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, on in
+                        try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
+                    }
+            }
+            Section("Claude Code") {
+                LabeledContent("Hooks") {
+                    Text(hooksInstalled ? "Installed" : "Not installed")
+                        .foregroundStyle(hooksInstalled ? .green : .secondary)
+                }
+                HStack {
+                    Button(hooksInstalled ? "Reinstall" : "Install Hooks") { install() }
+                    if hooksInstalled { Button("Remove") { remove() } }
+                }
+                Text("Adds triage's entries to ~/.claude/settings.json and leaves your other hooks untouched. A one-time backup is saved as settings.json.triage-backup.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let hookError { Text(hookError).font(.caption).foregroundStyle(.red) }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var behaviorTab: some View {
+        Form {
+            Section("Opening and approvals") {
                 Toggle("Open on hover", isOn: $hoverOpen)
                 LabeledContent("Hover delay") {
                     Slider(value: $hoverDelay, in: 0.1...1.5) { Text("") }.frame(width: 160)
@@ -47,7 +93,13 @@ struct SettingsView: View {
                     Text("\(Int(autoCollapse))s").monospacedDigit().frame(width: 48)
                 }.disabled(!autoOpen)
             }
-            Section("Appearance") {
+        }
+        .formStyle(.grouped)
+    }
+
+    private var pillTab: some View {
+        Form {
+            Section("Pill") {
                 Picker("Collapsed width", selection: $pillWidth) {
                     ForEach(PillWidthMode.allCases) { Text($0.label).tag($0.rawValue) }
                 }
@@ -95,6 +147,12 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var sessionsTab: some View {
+        Form {
             Section("Sessions") {
                 Toggle("Show running terminals", isOn: $showTerminals)
                 Toggle("Include idle terminals", isOn: $showIdleTerminals).disabled(!showTerminals)
@@ -108,41 +166,21 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Stepper("Rows per section: \(rowsPerSection)", value: $rowsPerSection, in: 2...8)
             }
-            Section("Claude Code") {
-                LabeledContent("Hooks") {
-                    Text(hooksInstalled ? "Installed" : "Not installed")
-                        .foregroundStyle(hooksInstalled ? .green : .secondary)
-                }
-                HStack {
-                    Button(hooksInstalled ? "Reinstall" : "Install Hooks") { install() }
-                    if hooksInstalled { Button("Remove") { remove() } }
-                }
-                Text("Adds triage's entries to ~/.claude/settings.json and leaves your other hooks untouched. A one-time backup is saved as settings.json.triage-backup.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if let hookError { Text(hookError).font(.caption).foregroundStyle(.red) }
-            }
-            Section("General") {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, on in
-                        try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
-                    }
-            }
         }
         .formStyle(.grouped)
-        .onAppear { hooksInstalled = HookInstaller.isInstalled(); screenAccess = SystemIslandProbe.hasPermission }
-        .frame(width: 460, height: 1290)
     }
 
     private func install() {
         do {
             try HookSetup.installFromBundle()
+            UserDefaults.standard.set(false, forKey: Pref.hooksReconnectDeclined)
             hookError = nil
         } catch { hookError = error.localizedDescription }
         hooksInstalled = HookInstaller.isInstalled()
     }
 
     private func remove() {
-        do { try HookInstaller.uninstall(); hookError = nil } catch { hookError = error.localizedDescription }
+        do { try HookInstaller.uninstall(); UserDefaults.standard.set(true, forKey: Pref.hooksReconnectDeclined); hookError = nil } catch { hookError = error.localizedDescription }
         hooksInstalled = HookInstaller.isInstalled()
     }
 }

@@ -2,6 +2,10 @@ import Foundation
 import Darwin
 
 public enum TriagePaths {
+    public static let bundleID = "io.github.dkeg.triage"
+    /// Set when the user removes the hooks on purpose, so the app doesn't offer to reconnect them.
+    public static let hooksDeclinedKey = "hooksReconnectDeclined"
+
     public static var supportDir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Triage", isDirectory: true)

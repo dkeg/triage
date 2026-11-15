@@ -1,4 +1,5 @@
 import Foundation
+import TriageCore
 
 enum Pref {
     static let hoverOpen = "hoverOpen"
@@ -10,6 +11,7 @@ enum Pref {
     static let pillSide = "pillSide"
     static let rotateSeconds = "rotateSeconds"
     static let pillNudge = "pillNudge"
+    static let hooksReconnectDeclined = TriagePaths.hooksDeclinedKey
     static let showTerminals = "showTerminals"
     static let showIdleTerminals = "showIdleTerminals"
     static let showCommandArguments = "showCommandArguments"

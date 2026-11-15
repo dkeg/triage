@@ -1,5 +1,14 @@
 import Foundation
 
+/// Whether to offer putting triage's Claude Code hooks back.
+enum HookReconnect {
+    /// The helper copy only exists if the user connected before, so missing hooks were removed
+    /// without them asking (for example by an update).
+    static func shouldOffer(isApp: Bool, setupOffered: Bool, declined: Bool, helperExists: Bool, hooksInstalled: Bool) -> Bool {
+        isApp && setupOffered && !declined && helperExists && !hooksInstalled
+    }
+}
+
 enum ApprovalGate {
     /// Hosts where Claude Code shows its own permission prompt when a hook returns no decision.
     /// Anything else (Subspace/SDK-driven sessions, editors, unknown apps) may treat "no

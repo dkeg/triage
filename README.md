@@ -153,10 +153,11 @@ Developer flags: `--demo-attention`, `--demo-pending`, `--open-settings`. The de
 ## Uninstall
 
 ```
-brew uninstall --cask triage     # also removes the Claude Code hooks it added
+brew uninstall --cask triage          # removes the app; the hooks stay (harmless without the app)
+brew uninstall --zap triage           # also removes the Claude Code hooks, settings and logs
 ```
 
-or run `triage-hook uninstall` and delete the app.
+or run `triage-hook uninstall` first and then delete the app.
 
 ## License
 

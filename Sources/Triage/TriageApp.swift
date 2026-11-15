@@ -45,6 +45,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// The helper copy exists only if the user connected before, so hooks missing now were removed
+    /// without them asking (for example by an update). Offer to put them back.
+    private func offerHookReconnect() {
+        guard HookReconnect.shouldOffer(
+            isApp: Bundle.main.bundleURL.pathExtension == "app",
+            setupOffered: UserDefaults.standard.bool(forKey: "hookSetupOffered"),
+            declined: UserDefaults.standard.bool(forKey: Pref.hooksReconnectDeclined),
+            helperExists: FileManager.default.fileExists(atPath: TriagePaths.helperURL.path),
+            hooksInstalled: HookInstaller.isInstalled()) else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Reconnect triage to Claude Code?"
+        alert.informativeText = "triage's hooks are no longer in ~/.claude/settings.json, so sessions and approvals won't show up. This can happen after an update. Your other hooks aren't touched."
+        alert.addButton(withTitle: "Reconnect")
+        alert.addButton(withTitle: "Not Now")
+        alert.addButton(withTitle: "Don't Ask Again")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            do { try HookSetup.installFromBundle() } catch {
+                TriageLog.write("reconnect failed: \(error.localizedDescription)")
+            }
+        case .alertThirdButtonReturn:
+            UserDefaults.standard.set(true, forKey: Pref.hooksReconnectDeclined)
+        default: break
+        }
+    }
+
     private func offerLaunchAtLogin() {
         let key = "launchAtLoginOffered"
         guard !UserDefaults.standard.bool(forKey: key),
@@ -68,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             IslandController.shared.start()
             offerHookSetup()
+            offerHookReconnect()
             offerLaunchAtLogin()
             // Dev hook: just open the card.
             if CommandLine.arguments.contains("--demo-open") {

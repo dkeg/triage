@@ -13,20 +13,20 @@ cask "triage" do
   # `triage-hook install | uninstall | status` manages the Claude Code hooks from a terminal.
   binary "#{appdir}/Triage.app/Contents/MacOS/triage-hook"
 
-  # Remove triage's entries from ~/.claude/settings.json (other tools' hooks are left alone).
-  uninstall_preflight do
-    system_command "#{appdir}/Triage.app/Contents/MacOS/triage-hook",
-                   args:         ["uninstall"],
-                   must_succeed: false
-  end
-
   uninstall quit: "io.github.dkeg.triage"
 
-  zap trash: [
-    "~/Library/Application Support/Triage",
-    "~/Library/Logs/Triage",
-    "~/Library/Preferences/io.github.dkeg.triage.plist",
-  ]
+  # Plain `brew uninstall` (and `brew upgrade`) leave ~/.claude/settings.json alone, so an upgrade
+  # never disconnects triage. `brew uninstall --zap` also removes triage's hook entries.
+  zap script: {
+        executable:   "#{Dir.home}/Library/Application Support/Triage/bin/triage-hook",
+        args:         ["uninstall"],
+        must_succeed: false,
+      },
+      trash:  [
+        "~/Library/Application Support/Triage",
+        "~/Library/Logs/Triage",
+        "~/Library/Preferences/io.github.dkeg.triage.plist",
+      ]
 
   caveats <<~EOS
     On first launch triage offers to connect to Claude Code. That adds hook entries to
@@ -34,6 +34,7 @@ cask "triage" do
 
       triage-hook install
 
-    Uninstalling the cask removes those entries again.
+    `brew uninstall --zap triage` removes those entries again; a plain uninstall or upgrade leaves them,
+    and they do nothing while the app isn't installed. To remove them by hand: triage-hook uninstall
   EOS
 end
