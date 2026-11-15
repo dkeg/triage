@@ -1,6 +1,13 @@
 import Foundation
 import TriageCore
 
+/// Feature switches for things that are built but not shown yet.
+enum Features {
+    /// "Always allow" on the approval card. Off until the card shows the rule it will save: Claude
+    /// Code's suggestions are often broad wildcards (for example `gh repo *`).
+    static let alwaysAllow = false
+}
+
 enum Pref {
     static let hoverOpen = "hoverOpen"
     static let hoverDelay = "hoverDelay"

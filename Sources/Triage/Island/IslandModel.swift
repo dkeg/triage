@@ -269,8 +269,8 @@ final class IslandModel {
                       DiffLine(kind: .added, text: "static let topInset: CGFloat = 6"),
                       DiffLine(kind: .context, text: "… 2 more lines")],
             location: "triage · main",
-            alwaysSummary: "Edit(/Users/you/Projects/triage/**)",
-            allowAlways: { done() }))
+            alwaysSummary: Features.alwaysAllow ? "Edit(/Users/you/Projects/triage/**)" : nil,
+            allowAlways: Features.alwaysAllow ? { done() } : nil))
     }
 
     static func mockSessions() -> [Session] {

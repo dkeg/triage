@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Running terminals are listed next to agent sessions; the open card shows Agents and Terminals
+  side by side or in one column, with a row limit.
+- "Always allow" is hidden for now (Claude Code's suggested rules are often broad wildcards).
+- Settings are in four tabs.
+- Fixed: `brew upgrade` removed triage's Claude Code hooks; `triage-hook install` failed when run
+  by name; agent sessions with high process ids were missed.
+
 ## 0.1.3
 
 - The pill is flat like the hardware island (no drop shadow) and always visible, even with no sessions.

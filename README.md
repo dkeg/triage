@@ -6,7 +6,7 @@ box; any other agent can use it by sending a small hook event ([see below](#usin
 
 - **A small status pill** next to the island: "All clear", "N working", and a red flashing
   "N pending" when something is waiting on you.
-- **Approve, deny or "always allow"** from an expanded card that shows the full command, the tool's
+- **Approve or deny** from an expanded card that shows the full command, the tool's
   description, a before/after preview for edits, and the project and branch.
 - **See what each session is doing** ("Editing X.swift", "Running: swift build") with a timer.
 - **See running terminals too**: tabs with something in the foreground (a build, a dev server, `ssh`)
@@ -98,8 +98,7 @@ $ echo '{"hook_event_name":"PermissionRequest","session_id":"abc","cwd":"/tmp","
 
 A denial has `"behavior":"deny"` and a `"message"`. **Empty output means "no answer"**: triage isn't
 running, or it stepped aside for the agent's own prompt. Treat that as "ask the user the way you
-normally would"; don't treat it as approval or denial. The card shows an "Always allow" button only
-when the request carries Claude Code's `permission_suggestions`.
+normally would"; don't treat it as approval or denial.
 
 **Without the helper**, connect to the socket at
 `~/Library/Application Support/Triage/triage.sock` (owner-only). Each message is a 4-byte big-endian

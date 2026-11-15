@@ -138,7 +138,7 @@ final class IslandController {
             let handBack = ApprovalGate.canHandBack(hostBundleID: hostID)
             let suggestions = event.permissionSuggestions ?? []
             TriageLog.write("suggestions: \(suggestions.isEmpty ? "none" : String(describing: suggestions).prefix(300).description)")
-            let always: (() -> Void)? = suggestions.isEmpty ? nil : {
+            let always: (() -> Void)? = !Features.alwaysAllow || suggestions.isEmpty ? nil : {
                 TriageLog.write("decision approve=true (always allow) session=\(event.sessionID ?? "?")")
                 conn.reply(HookDecision.permissionResponse(allow: true, updatedPermissions: suggestions))
             }
