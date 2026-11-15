@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Scripted demo mode and a recording script for the website/README animation (`--demo-story`; does nothing
-  unless passed).
+- Scripted demo mode and recording scripts for the README/website animations (approval story, the pill
+  alone, a Live Activity making room) and the social image (`--demo-story`; does nothing unless passed).
 
 ## 0.2.0
 

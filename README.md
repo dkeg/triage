@@ -5,6 +5,20 @@
 </p>
 <p align="center"><sub>A permission request opens next to the island, one click approves it, and the card lists your agent sessions and running terminals. <a href="docs/media/triage-demo.mp4">Sharper MP4</a>. The sessions shown are made up.</sub></p>
 
+<details>
+<summary>More clips: the pill's alert state, and making room for a Live Activity</summary>
+
+<p align="center">
+  <img src="docs/media/triage-pill.gif" alt="The status pill cycling between All clear and active counts, flashing red when a request is pending, then returning to normal after approval" width="720"><br>
+  <sub>The pill alone: it cycles, flashes red when something needs you, and settles after you approve.</sub>
+</p>
+<p align="center">
+  <img src="docs/media/triage-music.gif" alt="The pill sliding aside as a Live Activity opens in the Dynamic Island, then returning" width="720"><br>
+  <sub>When the island opens for a Live Activity (a stand-in is drawn here), the pill slides aside and back.</sub>
+</p>
+
+</details>
+
 A menu-bar app that shows your **AI coding agent** sessions around the MacBook Pro's Dynamic Island,
 and lets you approve or deny permission requests from there. Claude Code is supported out of the
 box; any other agent can use it by sending a small hook event ([see below](#using-triage-with-other-agents)).
@@ -151,10 +165,12 @@ Release builds (universal, hardened runtime, notarized):
 SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=… scripts/release.sh
 ```
 
-Recording the animation above: `scripts/demo/record.sh` plays a scripted story with fake sessions
-(`Sources/Triage/Demo/DemoStory.swift`) on a plain stage and converts it to MP4, WebM and GIF. It needs
-`ffmpeg` and takes about 25 seconds; leave the mouse alone while it runs. Re-run it after UI changes and
-copy the results to `docs/media/`.
+Recording the animations above: `scripts/demo/record.sh [approval|pill|music]` plays a scripted story with
+fake sessions (`Sources/Triage/Demo/DemoStory.swift`) on a plain stage and converts it to MP4, WebM and GIF;
+`scripts/demo/social.sh` makes the link-preview image. It needs `ffmpeg` and takes about 30 seconds per
+scene; leave the mouse alone while it runs. The script cuts each clip relative to a sync marker and refuses
+to keep one whose length is off (a clip that ran past the stage would show your real desktop). See
+`docs/media/README.md`.
 
 Developer flags: `--demo-attention`, `--demo-pending`, `--open-settings`. The debug log is at
 `~/Library/Logs/Triage/triage.log`.

@@ -1,8 +1,14 @@
 import AppKit
+import Observation
 import SwiftUI
 import TriageCore
 
-/// A scripted, repeatable demo used to record the website animation (`--demo-story`).
+/// A scripted, repeatable demo used to record the website animations (`--demo-story`).
+///
+/// Scenes (`--demo-scene=NAME`): `approval` (default: the full request/approve story), `pill` (the
+/// collapsed pill alone, including the red "pending" flash) and `music` (a Live Activity opens in the
+/// island and the pill slides aside; the Live Activity is drawn by the stage, so no real music or
+/// album art is shown).
 ///
 /// It replaces everything real (sessions, terminals, the hook server) with fake data, puts the
 /// island on a plain dark "stage" window with the menu bar hidden, and plays a short approval
@@ -12,6 +18,10 @@ import TriageCore
 final class DemoStory {
     static var isEnabled: Bool { CommandLine.arguments.contains("--demo-story") }
 
+    static var scene: String {
+        CommandLine.arguments.first { $0.hasPrefix("--demo-scene=") }.map { String($0.dropFirst("--demo-scene=".count)) } ?? "approval"
+    }
+
     /// Preferences for this process only (the argument domain outranks stored values and writes nothing).
     static func installOverrides() {
         UserDefaults.standard.setVolatileDomain([
@@ -20,6 +30,8 @@ final class DemoStory {
             Pref.rotateSeconds: 2.2, Pref.pillSide: PillSide.left.rawValue,
             Pref.holdWhenFocused: false, Pref.showTerminals: true, Pref.avoidMenuIcons: false,
             Pref.approvalTimeout: 600.0,
+            // The strip scenes show the pill only, so a request must not open the card.
+            Pref.autoOpenOnAttention: scene == "approval",
         ], forName: UserDefaults.argumentDomain)
     }
 
@@ -27,6 +39,8 @@ final class DemoStory {
     private var model: IslandModel { controller.model }
     private var stage: NSWindow?
     private var t0 = Date()
+    private let island = DemoIsland()
+    private let marker = DemoMarker()
 
     init(controller: IslandController) { self.controller = controller }
 
@@ -38,7 +52,7 @@ final class DemoStory {
         static let approveFallback = 7.2       // if the pointer tool isn't driving, approve anyway
         static let terminals = 6.8
         static let openFallback = 9.4
-        static let end = 12.4
+        static let end = 13.8        // the clip is cut earlier; the stage stays up so timing jitter never shows the desktop
     }
 
     func run() async {
@@ -53,9 +67,26 @@ final class DemoStory {
         } else {
             try? await Task.sleep(for: .seconds(1.5))
         }
+        // Sync marker: a white square at the recording's lower-left corner, shown just before the story
+        // starts, so the recording script can find the story's start frame exactly (screencapture's start
+        // latency varies). It is cut out of every clip: the clip starts after it disappears.
+        marker.visible = true
+        try? await Task.sleep(for: .seconds(0.35))
+        marker.visible = false
+        try? await Task.sleep(for: .seconds(1.2))
         t0 = Date()
         try? String(t0.timeIntervalSince1970).write(toFile: "/tmp/triage-demo-t0", atomically: true, encoding: .utf8)
 
+        switch Self.scene {
+        case "pill": await runPill()
+        case "music": await runMusic()
+        default: await runApproval()
+        }
+        NSApp.presentationOptions = []
+        NSApp.terminate(nil)
+    }
+
+    private func runApproval() async {
         await at(T.working); startWorking()
         await at(T.request); sendRequest()
         await at(T.approveFallback)
@@ -64,8 +95,29 @@ final class DemoStory {
         await at(T.openFallback)
         if model.mode == .collapsed { controller.openFromClick() }
         await at(T.end)
-        NSApp.presentationOptions = []
-        NSApp.terminate(nil)
+    }
+
+    /// The pill alone: cycling, then a request makes it flash red, then it is approved.
+    private func runPill() async {
+        await at(2.4); startWorking()
+        await at(3.8); sendRequest()
+        await at(7.0); controller.resolve(approve: true)
+        await at(11.2)
+    }
+
+    /// A Live Activity (music) opens in the island; the pill slides aside, then back.
+    private func runMusic() async {
+        startWorking()
+        await at(1.8); setMusic(true)
+        await at(5.2); setMusic(false)
+        await at(9.4)
+    }
+
+    private func setMusic(_ on: Bool) {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.74)) {
+            island.width = on ? 137 : 59
+            model.measuredIslandWidth = on ? 137 : 58
+        }
     }
 
     private func at(_ seconds: Double) async {
@@ -140,7 +192,8 @@ final class DemoStory {
         w.acceptsMouseMovedEvents = true
         w.collectionBehavior = [.canJoinAllSpaces, .stationary]
         let center = (screen.frame.midX - screen.frame.minX) / screen.frame.width
-        w.contentView = NSHostingView(rootView: StageView(centerX: center))
+        let cutoutMid = IslandGeometry.compute(for: screen).cutout.midX - screen.frame.minX
+        w.contentView = NSHostingView(rootView: StageView(centerX: center, islandMidX: cutoutMid, island: island, marker: marker))
         w.setFrame(screen.frame, display: true)
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -155,15 +208,70 @@ private final class StageWindow: NSWindow {
     override var canBecomeKey: Bool { true }
 }
 
-/// A dark backdrop with a soft spotlight where the card opens, so the black pill and island read clearly.
+@MainActor @Observable
+final class DemoMarker { var visible = false }
+
+@MainActor @Observable
+final class DemoIsland {
+    /// Width of the (stand-in) Live Activity over the hardware island; 59 is the idle island.
+    var width: CGFloat = 59
+}
+
+/// A dark backdrop with a soft spotlight where the card opens, so the black pill and island read
+/// clearly, plus a stand-in for the system's Live Activity (widening island with cover art and a waveform).
 private struct StageView: View {
     let centerX: CGFloat
+    let islandMidX: CGFloat
+    let island: DemoIsland
+    let marker: DemoMarker
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             Color(red: 0.035, green: 0.04, blue: 0.055)
             RadialGradient(colors: [Color(red: 0.16, green: 0.19, blue: 0.27).opacity(0.9), .clear],
                            center: UnitPoint(x: centerX, y: 0.12), startRadius: 0, endRadius: 520)
+            if island.width > 62 { liveActivity }
+            // 12pt square at (8, 90) from the recording region's top-left (the region is 720pt wide, centered on the island).
+            if marker.visible {
+                Rectangle().fill(Color.white).frame(width: 12, height: 12)
+                    .position(x: islandMidX - 360 + 8 + 6, y: 90 + 6)
+            }
         }
         .ignoresSafeArea()
+    }
+
+    private var liveActivity: some View {
+        let open = min(max((island.width - 62) / 60, 0), 1)          // 0 -> 1 as it widens
+        return ZStack {
+            Capsule(style: .continuous).fill(Color.black)
+            HStack {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(red: 0.36, green: 0.28, blue: 0.85), Color(red: 0.13, green: 0.74, blue: 0.80)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 23, height: 23)
+                Spacer()
+                Waveform()
+            }
+            .padding(.horizontal, 12)
+            .opacity(open)
+        }
+        .frame(width: island.width, height: 33)
+        .position(x: islandMidX, y: 8 + 16.5)
+    }
+}
+
+/// Five bars that move, like the Music Live Activity's waveform.
+private struct Waveform: View {
+    var body: some View {
+        TimelineView(.animation) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 2.5) {
+                ForEach(0..<5, id: \.self) { i in
+                    let h = 6 + 11 * abs(sin(t * 4.2 + Double(i) * 0.9))
+                    Capsule().fill(Color(red: 0.36, green: 0.78, blue: 0.95)).frame(width: 2.8, height: h)
+                }
+            }
+            .frame(height: 19)
+        }
     }
 }

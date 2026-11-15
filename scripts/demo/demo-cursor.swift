@@ -6,6 +6,13 @@
 import CoreGraphics
 import Foundation
 
+// `demo-cursor park x y` just moves the pointer out of the way (used by the strip scenes).
+if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "park",
+   let x = Double(CommandLine.arguments[2]), let y = Double(CommandLine.arguments[3]) {
+    CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: CGPoint(x: x, y: y), mouseButton: .left)?
+        .post(tap: .cghidEventTap)
+    exit(0)
+}
 let a = CommandLine.arguments.dropFirst().compactMap(Double.init)
 guard a.count == 6 else { print("usage: demo-cursor approveX approveY pillX pillY restX restY"); exit(2) }
 let approve = CGPoint(x: a[0], y: a[1]), pill = CGPoint(x: a[2], y: a[3]), rest = CGPoint(x: a[4], y: a[5])
