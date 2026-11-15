@@ -139,9 +139,9 @@ final class IslandModel {
     /// Width reserved in the middle for the hardware island, including a system Live Activity.
     static let wideReserve: CGFloat = 150
     static let wing: CGFloat = 96
-    static let expandedWidth: CGFloat = 620
+    static let expandedWidth: CGFloat = 540
     /// Used when agents and terminals are shown side by side.
-    static let expandedWidthTwoColumns: CGFloat = 780
+    static let expandedWidthTwoColumns: CGFloat = 680
     static let rowHeight: CGFloat = 52, sectionHeaderHeight: CGFloat = 26, overflowRowHeight: CGFloat = 22
 
     /// Rows actually shown per section: the setting, reduced if the card wouldn't fit its panel
@@ -218,7 +218,7 @@ final class IslandModel {
 
     /// Estimated height of the approval card (the panel is sized from this, so it errs generous).
     static func cardHeight(for r: AttentionRequest) -> CGFloat {
-        let charsPerLine = 66.0
+        let charsPerLine = 58.0          // monospaced 12pt in the ~490pt-wide card, with margin
         let cmdLines = min(max(Int((Double(r.command.count) / charsPerLine).rounded(.up)), 1), 6)
             + max(r.command.filter { $0 == "\n" }.count, 0)
         var h: CGFloat = 12 + 16 + 8            // padding, header, gap
