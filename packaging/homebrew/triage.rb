@@ -4,7 +4,7 @@ cask "triage" do
 
   url "https://github.com/dkeg/triage/releases/download/v#{version}/Triage-#{version}.zip"
   name "triage"
-  desc "Dynamic Island status and approvals for Claude Code sessions"
+  desc "Dynamic Island status and approvals for AI coding agent sessions"
   homepage "https://github.com/dkeg/triage"
 
   depends_on macos: :sonoma
