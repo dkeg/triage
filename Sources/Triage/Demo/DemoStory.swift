@@ -18,6 +18,11 @@ import TriageCore
 final class DemoStory {
     static var isEnabled: Bool { CommandLine.arguments.contains("--demo-story") }
 
+    /// `--demo-backdrop=stage|wallpaper|light` (default `stage`).
+    static var backdrop: String {
+        CommandLine.arguments.first { $0.hasPrefix("--demo-backdrop=") }.map { String($0.dropFirst("--demo-backdrop=".count)) } ?? "stage"
+    }
+
     static var scene: String {
         CommandLine.arguments.first { $0.hasPrefix("--demo-scene=") }.map { String($0.dropFirst("--demo-scene=".count)) } ?? "approval"
     }
@@ -193,7 +198,18 @@ final class DemoStory {
         w.collectionBehavior = [.canJoinAllSpaces, .stationary]
         let center = (screen.frame.midX - screen.frame.minX) / screen.frame.width
         let cutoutMid = IslandGeometry.compute(for: screen).cutout.midX - screen.frame.minX
-        w.contentView = NSHostingView(rootView: StageView(centerX: center, islandMidX: cutoutMid, island: island, marker: marker))
+        var wallpaper: NSImage?
+        if Self.backdrop == "wallpaper" {
+            // `--demo-wallpaper=/path/to/image` wins (needed for video "Aerial" wallpapers, which have no still);
+            // otherwise the system's desktop picture file.
+            if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--demo-wallpaper=") })?.dropFirst("--demo-wallpaper=".count) {
+                wallpaper = NSImage(contentsOfFile: String(path))
+            } else if let url = NSWorkspace.shared.desktopImageURL(for: screen) {
+                wallpaper = NSImage(contentsOf: url)
+            }
+        }
+        w.contentView = NSHostingView(rootView: StageView(centerX: center, islandMidX: cutoutMid, island: island, marker: marker,
+                                                          backdrop: Self.backdrop, wallpaper: wallpaper))
         w.setFrame(screen.frame, display: true)
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -224,12 +240,12 @@ private struct StageView: View {
     let islandMidX: CGFloat
     let island: DemoIsland
     let marker: DemoMarker
+    let backdrop: String
+    let wallpaper: NSImage?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Color(red: 0.035, green: 0.04, blue: 0.055)
-            RadialGradient(colors: [Color(red: 0.16, green: 0.19, blue: 0.27).opacity(0.9), .clear],
-                           center: UnitPoint(x: centerX, y: 0.12), startRadius: 0, endRadius: 520)
+            background
             if island.width > 62 { liveActivity }
             // 12pt square at (8, 90) from the recording region's top-left (the region is 720pt wide, centered on the island).
             if marker.visible {
@@ -238,6 +254,22 @@ private struct StageView: View {
             }
         }
         .ignoresSafeArea()
+    }
+
+    @ViewBuilder private var background: some View {
+        if let wallpaper {
+            // The real desktop picture, filling the screen like the system does (no windows, menu bar or icons).
+            Image(nsImage: wallpaper).resizable().scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+        } else if backdrop == "light" {
+            Color(red: 0.90, green: 0.91, blue: 0.94)
+            RadialGradient(colors: [Color.white.opacity(0.95), .clear],
+                           center: UnitPoint(x: centerX, y: 0.1), startRadius: 0, endRadius: 560)
+        } else {
+            Color(red: 0.035, green: 0.04, blue: 0.055)
+            RadialGradient(colors: [Color(red: 0.16, green: 0.19, blue: 0.27).opacity(0.9), .clear],
+                           center: UnitPoint(x: centerX, y: 0.12), startRadius: 0, endRadius: 520)
+        }
     }
 
     private var liveActivity: some View {

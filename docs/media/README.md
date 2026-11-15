@@ -1,6 +1,6 @@
 # Media
 
-Recorded with `scripts/demo/record.sh` from a scripted demo with made-up sessions (no real data), on a
+Recorded with `scripts/demo/record.sh` (`BACKDROP=wallpaper WALLPAPER=frame.png` for the wallpaper versions) from a scripted demo with made-up sessions (no real data), on a
 plain stage. Regenerate after UI changes (about 90 seconds for all three; leave the mouse alone).
 
 | File | Use | Size |
@@ -10,6 +10,10 @@ plain stage. Regenerate after UI changes (about 90 seconds for all three; leave 
 | `triage-music.mp4` / `.webm` / `.gif` | Features: the pill slides aside when a Live Activity opens in the island (7.8s) | 1440x220 (GIF 720x110) |
 | `*-poster.png` | Video placeholder frames | 1440 wide |
 | `social.png` | Social/link preview image | 1200x630 |
+
+Each clip also exists as `*-wallpaper.*`: the same story on a real desktop wallpaper (a still frame from the
+macOS "Aerial" blue-streak wallpaper) instead of the dark stage. Use those where a lighter, more lifelike
+backdrop suits the page. The wallpaper is Apple's artwork, so check you're comfortable showing it publicly.
 
 The Live Activity in `triage-music` is a stand-in drawn by the demo (no real music or album art).
 

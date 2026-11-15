@@ -2,6 +2,9 @@
 # Records the website animation from the scripted demo (DemoStory) and converts it to MP4, WebM and GIF.
 #
 #   scripts/demo/record.sh [scene]      record and convert; scene = approval (default) | pill | music
+#   BACKDROP=wallpaper|light|stage ...  what is behind the island (default stage = dark; wallpaper = your real
+#                                       desktop picture; light = soft light grey). Output names get a suffix.
+#   WALLPAPER=/path/image.png           with BACKDROP=wallpaper: use this image (e.g. a frame from your Aerial video wallpaper)
 #   scripts/demo/record.sh --calibrate  save screenshots at the moments the pointer needs to hit (approval)
 #
 # Scenes: approval = the full request/approve story (triage-demo.*); pill = the collapsed pill alone
@@ -26,6 +29,8 @@ case "$SCENE" in
   *) echo "unknown scene: $SCENE (approval | pill | music)" >&2; exit 1 ;;
 esac
 REGION_W=720; REGION_X=$((CX - REGION_W / 2))
+BACKDROP="${BACKDROP:-stage}"
+case "$BACKDROP" in stage) ;; wallpaper|light) NAME="$NAME-$BACKDROP" ;; *) echo "unknown BACKDROP: $BACKDROP" >&2; exit 1 ;; esac
 mkdir -p "$OUT"
 
 command -v ffmpeg >/dev/null || { echo "ffmpeg is required (brew install ffmpeg)" >&2; exit 1; }
@@ -46,7 +51,7 @@ swiftc -O -o /tmp/triage-demo-cursor "$ROOT/scripts/demo/demo-cursor.swift"
 
 pkill -x Triage 2>/dev/null || true; sleep 1
 rm -f /tmp/triage-demo-go /tmp/triage-demo-t0 /tmp/triage-demo.mov
-open -n "$ROOT/build/Triage.app" --args --demo-story --demo-wait "--demo-scene=$SCENE"
+open -n "$ROOT/build/Triage.app" --args --demo-story --demo-wait "--demo-scene=$SCENE" "--demo-backdrop=$BACKDROP" ${WALLPAPER:+"--demo-wallpaper=$WALLPAPER"}
 sleep 2.5                                                    # stage window up, menu bar hidden
 
 if [ "$CALIBRATE" = 1 ]; then
@@ -101,5 +106,26 @@ for f in "$NAME.mp4" "$NAME.webm"; do
   LEN=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
   python3 -c "import sys; sys.exit(0 if abs($LEN - $DUR) < 0.15 else 1)" || { echo "ERROR: $f is ${LEN}s, expected ${DUR}s; refusing to keep it (it may show the real desktop)" >&2; rm -f "$NAME".{mp4,webm,gif} "$NAME-poster.png"; exit 1; }
 done
+# Safety (works for any backdrop): the left and right edges of the frame are never covered by the pill or card,
+# so they must stay the same in every frame. A frame showing the real desktop would change them.
+python3 - "$NAME.mp4" <<'PY' || { echo "ERROR: $NAME.mp4 has frames whose edges change (the real desktop may be showing); refusing to keep it" >&2; rm -f "$NAME".{mp4,webm,gif} "$NAME-poster.png"; exit 1; }
+import subprocess, sys
+src = sys.argv[1]
+worst = 0.0
+for crop in ("crop=96:ih:0:0", "crop=96:ih:iw-96:0"):
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", src, "-vf", f"fps=30,{crop},scale=24:-2,format=gray", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+                         capture_output=True).stdout
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=height", "-of", "csv=p=0", src],
+                           capture_output=True, text=True).stdout.split()[0]
+    fh = int(round(int(probe) * 24 / 96 / 2) * 2)
+    n = 24 * fh
+    frames = [raw[i * n:(i + 1) * n] for i in range(len(raw) // n)]
+    base = frames[0]
+    for f in frames:
+        d = sum(abs(a - b) for a, b in zip(f, base)) / n
+        worst = max(worst, d)
+print(f"edge check: worst frame change {worst:.1f} (limit 6)")
+sys.exit(0 if worst < 6 else 1)
+PY
 ffmpeg -v error -y -ss "$(python3 -c "print($SS + $POSTER_T)")" -i /tmp/triage-demo.mov -frames:v 1 -vf "scale=1440:-2" $NAME-poster.png
 ls -la "$OUT" | awk '{print $5, $9}' | tail -n +4

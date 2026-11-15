@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Demo clips can use a real wallpaper (or a light backdrop) behind the island.
 - Scripted demo mode and recording scripts for the README/website animations (approval story, the pill
   alone, a Live Activity making room) and the social image (`--demo-story`; does nothing unless passed).
 
