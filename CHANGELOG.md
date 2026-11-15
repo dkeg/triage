@@ -1,13 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-- Running terminals are listed next to agent sessions; the open card shows Agents and Terminals
-  side by side or in one column, with a row limit.
-- "Always allow" is hidden for now (Claude Code's suggested rules are often broad wildcards).
-- Settings are in four tabs.
-- Fixed: `brew upgrade` removed triage's Claude Code hooks; `triage-hook install` failed when run
-  by name; agent sessions with high process ids were missed.
+**New**
+- Running terminals are listed next to your agent sessions: the folder, the command and how long it has
+  been running. Secret-looking arguments (tokens, passwords, URL credentials) are masked, and arguments
+  can be turned off. Terminals that are running an agent aren't listed twice.
+- The open card shows Agents and Terminals side by side or in one column (Settings > Sessions), with a
+  row limit per section and a "+N more" line. It always fits its panel, and it is narrower than before.
+- The Agents header shows how many sessions are active (working or waiting on you).
+- The idle pill always cycles between "All clear" and "N active", even when N is 0.
+- Settings are organized in four tabs.
+
+**Changed**
+- "Always allow" is hidden for now. Claude Code's suggested rules are often broad wildcards (for example
+  `gh repo *`), and the card didn't show what would be saved.
+
+**Fixed**
+- `brew upgrade` removed triage's Claude Code hooks. The cask now leaves them alone (`brew uninstall --zap`
+  removes them), and the app offers to reconnect if its helper exists but the hooks are gone. People
+  upgrading from 0.1.x will see this offer once, because their installed cask still removes the hooks.
+- `triage-hook install` failed when run by name from PATH.
+- Agent sessions with high process ids were missed, so some sessions never appeared.
+- Pill position: the island's width is measured by its own black extent, which works on dark
+  wallpapers and ignores Live Activity album art; the pill moves aside at once when the island widens.
+- Hover/click regions, flat look (no drop shadow), and the pill is always visible.
 
 ## 0.1.3
 
