@@ -1,19 +1,19 @@
 # triage
 
 <p align="center">
-  <img src="docs/media/triage-demo.gif" alt="triage showing a permission request next to the Dynamic Island, approving it, then listing agent sessions and running terminals" width="720">
+  <img src="docs/media/triage-demo-wallpaper.gif" alt="triage showing a permission request next to the Dynamic Island, approving it, then listing agent sessions and running terminals" width="720">
 </p>
-<p align="center"><sub>A permission request opens next to the island, one click approves it, and the card lists your agent sessions and running terminals. <a href="docs/media/triage-demo.mp4">Sharper MP4</a>. The sessions shown are made up.</sub></p>
+<p align="center"><sub>A permission request opens next to the island, one click approves it, and the card lists your agent sessions and running terminals. <a href="docs/media/triage-demo-wallpaper.mp4">Sharper MP4</a>. The sessions shown are made up.</sub></p>
 
 <details>
 <summary>More clips: the pill's alert state, and making room for a Live Activity</summary>
 
 <p align="center">
-  <img src="docs/media/triage-pill.gif" alt="The status pill cycling between All clear and active counts, flashing red when a request is pending, then returning to normal after approval" width="720"><br>
+  <img src="docs/media/triage-pill-wallpaper.gif" alt="The status pill cycling between All clear and active counts, flashing red when a request is pending, then returning to normal after approval" width="720"><br>
   <sub>The pill alone: it cycles, flashes red when something needs you, and settles after you approve.</sub>
 </p>
 <p align="center">
-  <img src="docs/media/triage-music.gif" alt="The pill sliding aside as a Live Activity opens in the Dynamic Island, then returning" width="720"><br>
+  <img src="docs/media/triage-music-wallpaper.gif" alt="The pill sliding aside as a Live Activity opens in the Dynamic Island, then returning" width="720"><br>
   <sub>When the island opens for a Live Activity (a stand-in is drawn here), the pill slides aside and back.</sub>
 </p>
 
