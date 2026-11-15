@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3
+
+- The pill is flat like the hardware island (no drop shadow) and always visible, even with no sessions.
+- Fixed the pill sitting at an inconsistent distance from the island: the island's width is now measured
+  by its own black extent, so it works on dark wallpapers and ignores Live Activity album art.
+- The pill moves aside immediately when the island widens (charging, Music, timers).
+- Auto width hides the pill while menu bar icons (for example ones a menu-bar manager reveals) are
+  where it would sit. Setting: "Step aside for menu bar icons".
+
 ## 0.1.2
 
 - Releases are fully automated: pushing a tag builds, notarizes, publishes and updates the cask.
