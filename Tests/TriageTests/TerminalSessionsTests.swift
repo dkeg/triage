@@ -168,5 +168,33 @@ final class SectionLayoutTests: XCTestCase {
         roomy.rowsPerSection = 4
         XCTAssertEqual(roomy.effectiveRows, 4)                          // plenty of room: setting honoured
     }
+
+    func testActiveAgentsCountWorkingAndWaitingButNotIdleOrDone() {
+        let m = IslandModel()
+        m.sessions = [Session(name: "a", source: .claudeCode, state: .running, detail: ""),
+                      Session(name: "b", source: .claudeCode, state: .needsInput, detail: ""),
+                      Session(name: "c", source: .claudeCode, state: .idle, detail: ""),
+                      Session(name: "d", source: .claudeCode, state: .done, detail: "")]
+        XCTAssertEqual(m.activeAgentCount, 2)
+        m.sessions[0].state = .idle; m.sessions[1].state = .done
+        XCTAssertEqual(m.activeAgentCount, 0)
+    }
+
+    func testIdlePillAlwaysCyclesBetweenAllClearAndTheActiveCount() {
+        let m = IslandModel()
+        XCTAssertEqual(m.pillStatuses, [.allClear, .active(0)])            // cycles even with nothing running
+        XCTAssertEqual(m.pillStatuses.map(\.text), ["All clear", "0 active"])
+        m.sessions = [Session(name: "a", source: .claudeCode, state: .running, detail: ""),
+                      Session(name: "b", source: .claudeCode, state: .idle, detail: "")]
+        XCTAssertEqual(m.pillStatuses.map(\.text), ["All clear", "1 active"])
+    }
+
+    func testUrgentStatesStandAloneAndDoNotCycle() {
+        let m = IslandModel()
+        m.sessions = [Session(name: "a", source: .claudeCode, state: .needsInput, detail: "")]
+        XCTAssertEqual(m.pillStatuses, [.waiting(1)])
+        m.addPermission(HookEvent.decode(Data(#"{"hook_event_name":"PermissionRequest","session_id":"p","tool_name":"Bash"}"#.utf8))!) { _ in }
+        XCTAssertEqual(m.pillStatuses, [.pending(1)])                       // a request outranks a waiting question
+    }
 }
 

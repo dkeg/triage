@@ -119,7 +119,7 @@ private struct ExpandedContent: View {
                     .frame(maxWidth: .infinity, minHeight: 56)
             } else if model.twoColumns {
                 HStack(alignment: .top, spacing: 6) {
-                    SessionSection(title: "Agents", model: model, list: model.sessions, compact: true, onJump: onJump)
+                    SessionSection(title: "Agents", model: model, list: model.sessions, compact: true, active: model.activeAgentCount, onJump: onJump)
                     SessionSection(title: "Terminals", model: model, list: model.terminals, compact: true, onJump: onJump)
                 }
                 .padding(.horizontal, 8)
@@ -127,7 +127,7 @@ private struct ExpandedContent: View {
                 // One column: agents, then terminals (either may be empty).
                 VStack(spacing: 0) {
                     if !model.sessions.isEmpty {
-                        SessionSection(title: "Agents", model: model, list: model.sessions, compact: false, onJump: onJump)
+                        SessionSection(title: "Agents", model: model, list: model.sessions, compact: false, active: model.activeAgentCount, onJump: onJump)
                     }
                     if !model.terminals.isEmpty {
                         SessionSection(title: "Terminals", model: model, list: model.terminals, compact: false, onJump: onJump)
@@ -146,6 +146,8 @@ private struct SessionSection: View {
     let model: IslandModel
     let list: [Session]
     let compact: Bool
+    /// Shown after the total as "· N active" when above zero (agents only).
+    var active: Int? = nil
     let onJump: (Session) -> Void
 
     var body: some View {
@@ -153,6 +155,9 @@ private struct SessionSection: View {
             HStack(spacing: 6) {
                 Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(0.6)
                 Text("\(list.count)").font(.system(size: 10, weight: .medium).monospacedDigit())
+                if let active, active > 0 {
+                    Text("· \(active) active").font(.system(size: 10, weight: .medium).monospacedDigit())
+                }
                 Spacer()
             }
             .foregroundStyle(.white.opacity(0.4))
@@ -372,14 +377,14 @@ private struct StatusRotator: View {
     }
 
     private var lines: [Line] {
-        let pending = model.pending.count
-        if pending > 0 { return [Line(text: "\(pending) pending", color: .red, dot: .red, pulsing: true)] }
-        if model.needsInputCount > 0 {
-            return [Line(text: "\(model.needsInputCount) waiting", color: .orange, dot: .orange, pulsing: true)]
+        model.pillStatuses.map { status in
+            switch status {
+            case .pending: Line(text: status.text, color: .red, dot: .red, pulsing: true)
+            case .waiting: Line(text: status.text, color: .orange, dot: .orange, pulsing: true)
+            case .allClear: Line(text: status.text, color: .white.opacity(0.9), dot: .green)
+            case .active(let n): Line(text: status.text, color: .white.opacity(n > 0 ? 0.75 : 0.5), dot: n > 0 ? .green : .gray)
+            }
         }
-        let clear = Line(text: "All clear", color: .white.opacity(0.9), dot: .green)
-        let working = model.sessions.filter { $0.state == .running }.count
-        return working > 0 ? [clear, Line(text: "\(working) working", color: .white.opacity(0.75), dot: .green)] : [clear]
     }
 
     var body: some View {

@@ -4,6 +4,21 @@ import TriageCore
 
 enum IslandMode: Equatable { case collapsed, peek, expanded }
 
+/// What the collapsed pill can say. Urgent states stand alone; otherwise it alternates between
+/// "All clear" and the number of active agents (even when that is 0).
+enum PillStatus: Equatable {
+    case pending(Int), waiting(Int), allClear, active(Int)
+
+    var text: String {
+        switch self {
+        case .pending(let n): "\(n) pending"
+        case .waiting(let n): "\(n) waiting"
+        case .allClear: "All clear"
+        case .active(let n): "\(n) active"
+        }
+    }
+}
+
 /// How the open card arranges agents and terminals when both are present.
 enum CardLayout: String, CaseIterable, Identifiable {
     /// Agents on the left, terminals on the right (a wider card).
@@ -99,6 +114,16 @@ final class IslandModel {
         if w > current && w <= 420 { accept(); return }
         if let p = pendingIslandReading, abs(p - w) < 6 { accept() } else { pendingIslandReading = w }
     }
+    /// Agent sessions that are working or waiting on you (shown in the Agents header).
+    var activeAgentCount: Int { sessions.filter { $0.state == .running || $0.state == .needsInput }.count }
+
+    /// The statuses the pill shows: one fixed urgent state, or the idle pair that it alternates between.
+    var pillStatuses: [PillStatus] {
+        if !pending.isEmpty { return [.pending(pending.count)] }
+        if needsInputCount > 0 { return [.waiting(needsInputCount)] }
+        return [.allClear, .active(activeAgentCount)]
+    }
+
     /// What the pill calls "waiting": approvals and questions, i.e. an agent blocked on you.
     /// (Finished sessions awaiting your next prompt deliberately don't count.)
     var needsInputCount: Int { sessions.filter { $0.state == .needsInput }.count }
