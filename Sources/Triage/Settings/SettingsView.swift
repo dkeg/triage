@@ -13,6 +13,10 @@ struct SettingsView: View {
     @AppStorage(Pref.pillSide) private var pillSide = PillSide.left.rawValue
     @AppStorage(Pref.rotateSeconds) private var rotateSeconds = 3.5
     @AppStorage(Pref.pillNudge) private var pillNudge = 0.0
+    @AppStorage(Pref.showTerminals) private var showTerminals = true
+    @AppStorage(Pref.showIdleTerminals) private var showIdleTerminals = false
+    @AppStorage(Pref.showCommandArguments) private var showCommandArguments = true
+    @AppStorage(Pref.rowsPerSection) private var rowsPerSection = 4
     @AppStorage(Pref.avoidMenuIcons) private var avoidMenuIcons = true
     @State private var screenAccess = SystemIslandProbe.hasPermission
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -90,6 +94,14 @@ struct SettingsView: View {
                     }
                 }
             }
+            Section("Sessions") {
+                Toggle("Show running terminals", isOn: $showTerminals)
+                Toggle("Include idle terminals", isOn: $showIdleTerminals).disabled(!showTerminals)
+                Toggle("Show command arguments", isOn: $showCommandArguments).disabled(!showTerminals)
+                Text("A terminal is listed while something is running in it (a build, a server, ssh). Arguments that look like secrets (tokens, passwords, URL credentials) are masked, but the check is a heuristic, so turn arguments off if you share your screen.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Stepper("Rows per section: \(rowsPerSection)", value: $rowsPerSection, in: 2...8)
+            }
             Section("Claude Code") {
                 LabeledContent("Hooks") {
                     Text(hooksInstalled ? "Installed" : "Not installed")
@@ -112,7 +124,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { hooksInstalled = HookInstaller.isInstalled(); screenAccess = SystemIslandProbe.hasPermission }
-        .frame(width: 460, height: 1010)
+        .frame(width: 460, height: 1190)
     }
 
     private func install() {

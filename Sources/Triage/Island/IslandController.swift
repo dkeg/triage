@@ -18,6 +18,7 @@ final class IslandController {
     private(set) var isVisible = true
     private var server: HookServer?
     private let focuser = SessionFocuser()
+    private(set) lazy var terminalMonitor = TerminalMonitor(model: model)
     private(set) lazy var probe = SystemIslandProbe(model: model)
     private var pillWidthMode: PillWidthMode {
         PillWidthMode(rawValue: defaults.string(forKey: Pref.pillWidth) ?? "") ?? .wide
@@ -60,6 +61,7 @@ final class IslandController {
         }
         startServer()
         discoverSessions()
+        terminalMonitor.start()
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.discoverSessions()
@@ -93,6 +95,9 @@ final class IslandController {
         if model.pillSide != side { model.pillSide = side }
         let secs = defaults.object(forKey: Pref.rotateSeconds) as? Double ?? 3.5
         if model.rotateInterval != secs { model.rotateInterval = secs }
+        let rows = defaults.object(forKey: Pref.rowsPerSection) as? Int ?? 4
+        if model.rowsPerSection != rows { model.rowsPerSection = rows }
+        terminalMonitor.scan()
         let nudge = CGFloat(defaults.object(forKey: Pref.pillNudge) as? Double ?? 0)
         if model.pillNudge != nudge { model.pillNudge = nudge }
     }

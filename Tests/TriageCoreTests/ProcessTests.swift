@@ -25,3 +25,28 @@ final class AgentNameTests: XCTestCase {
         XCTAssertNotNil(ProcessTree.argv0(of: getpid()))
     }
 }
+
+final class ProcessListingTests: XCTestCase {
+    /// Regression: proc_listallpids returns a count, not bytes; treating it as bytes dropped every
+    /// process beyond the first ~25% of the table (new processes have the highest pids).
+    func testNewlySpawnedProcessIsFoundInTheSnapshotAndByName() throws {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        p.arguments = ["30"]
+        try p.run()
+        defer { p.terminate() }
+        let pid = p.processIdentifier
+        XCTAssertTrue(ProcessTable.allPIDs().contains(pid))
+        XCTAssertTrue(ProcessTable.snapshot().contains { $0.pid == pid })
+        XCTAssertTrue(ProcessTree.pids(named: "sleep").contains(pid))
+    }
+
+    func testListingIsNotTruncated() {
+        // Every process we can query individually must also be in the list.
+        let all = Set(ProcessTable.allPIDs())
+        XCTAssertTrue(all.contains(getpid()))
+        XCTAssertTrue(all.contains(getppid()) || getppid() <= 1)
+        XCTAssertGreaterThan(all.count, 100)
+    }
+}
+

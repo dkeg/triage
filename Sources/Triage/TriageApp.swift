@@ -69,6 +69,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             IslandController.shared.start()
             offerHookSetup()
             offerLaunchAtLogin()
+            // Dev hook: just open the card.
+            if CommandLine.arguments.contains("--demo-open") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2.5))
+                    IslandController.shared.openFromClick()
+                }
+            }
             // Dev hook: a pending request that stays collapsed (shows the flashing pill).
             if CommandLine.arguments.contains("--demo-pending") {
                 Task { @MainActor in

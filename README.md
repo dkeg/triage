@@ -9,6 +9,9 @@ box; any other agent can use it by sending a small hook event ([see below](#usin
 - **Approve, deny or "always allow"** from an expanded card that shows the full command, the tool's
   description, a before/after preview for edits, and the project and branch.
 - **See what each session is doing** ("Editing X.swift", "Running: swift build") with a timer.
+- **See running terminals too**: tabs with something in the foreground (a build, a dev server, `ssh`)
+  are listed next to your agent sessions, with the command and how long it's been running. The open
+  card shows agents and terminals side by side, a few rows each.
 - **Jump to a session** in the app that hosts it: Subspace, Ghostty, Kaku, iTerm2, Terminal.app
   and others.
 - Works with agents running in terminals, in Subspace, in Cursor, and in the Claude Code desktop app.
@@ -124,7 +127,9 @@ Finder** button), then relaunch triage.
 
 ## Settings
 
-Open from the menu-bar icon: hover and open behavior, which side of the island the pill sits on,
+Open from the menu-bar icon: which terminals to list (running only, or idle ones too), whether to
+show command arguments (secret-looking values like tokens and URL credentials are masked, but that's
+a heuristic, so turn arguments off if you share your screen), rows per section, hover and open behavior, which side of the island the pill sits on,
 how often it cycles, vertical position, collapsed width (Compact, Wide or Auto), how long an
 auto-opened card stays, and start at login.
 

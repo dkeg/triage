@@ -34,7 +34,7 @@ struct IslandGeometry: Equatable {
     }
 
     /// Fixed canvas the panel occupies; the island morphs inside it.
-    static let canvas = CGSize(width: 680, height: 520)
+    static let canvas = CGSize(width: 820, height: 640)
 
     /// The panel starts at the very top of the screen; the island shape is flush
     /// with that edge so it grows out of the cutout.

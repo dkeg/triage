@@ -31,21 +31,30 @@ public enum ProcessTree {
         return base
     }
 
-    /// argv[0] of a process, via KERN_PROCARGS2 (nil when not readable).
-    public static func argv0(of pid: Int32) -> String? {
+    /// argv of a process, via KERN_PROCARGS2 (nil when not readable).
+    public static func argv(of pid: Int32) -> [String]? {
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
         var size = 0
         guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 8 else { return nil }
         var buf = [UInt8](repeating: 0, count: size)
         guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0 else { return nil }
         // Layout: Int32 argc, exec path (NUL-terminated), NUL padding, then argv strings.
+        let argc = Int(buf.withUnsafeBytes { $0.loadUnaligned(as: Int32.self) })
         var i = MemoryLayout<Int32>.size
         while i < size, buf[i] != 0 { i += 1 }          // skip exec path
         while i < size, buf[i] == 0 { i += 1 }          // skip padding
-        let start = i
-        while i < size, buf[i] != 0 { i += 1 }
-        return start < i ? String(decoding: buf[start..<i], as: UTF8.self) : nil
+        var out: [String] = []
+        while out.count < argc, i < size {
+            let start = i
+            while i < size, buf[i] != 0 { i += 1 }
+            out.append(String(decoding: buf[start..<i], as: UTF8.self))
+            i += 1
+        }
+        return out.isEmpty ? nil : out
     }
+
+    /// argv[0] of a process (nil when not readable).
+    public static func argv0(of pid: Int32) -> String? { argv(of: pid)?.first }
 
     public static func parent(of pid: Int32) -> Int32? { info(pid).map { $0.kp_eproc.e_ppid } }
 
@@ -70,12 +79,7 @@ public enum ProcessTree {
 
     /// Pids of all processes whose executable is named `name`.
     public static func pids(named name: String) -> [Int32] {
-        let bytes = proc_listallpids(nil, 0)
-        guard bytes > 0 else { return [] }
-        var buf = [pid_t](repeating: 0, count: Int(bytes) / MemoryLayout<pid_t>.size + 64)
-        let got = proc_listallpids(&buf, Int32(buf.count * MemoryLayout<pid_t>.size))
-        guard got > 0 else { return [] }
-        return buf.prefix(Int(got) / MemoryLayout<pid_t>.size).filter { $0 > 0 && Self.name(of: $0) == name }
+        ProcessTable.allPIDs().filter { Self.name(of: $0) == name }
     }
 
     /// Ancestors of `pid`, nearest first (not including `pid` itself), stopping before launchd.

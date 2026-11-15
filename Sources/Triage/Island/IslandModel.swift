@@ -39,6 +39,10 @@ final class IslandModel {
     var geometry: IslandGeometry = .init(cutout: .zero, screenFrame: .zero, isPhysical: false)
 
     var pillWidthMode: PillWidthMode = .wide
+    /// Running terminals (tabs with something in the foreground), kept apart from agent sessions.
+    var terminals: [Session] = []
+    /// Most rows shown in each section of the open card.
+    var rowsPerSection = 4
     var pillSide: PillSide = .left
     /// Seconds between "All clear" and "N working".
     var rotateInterval: TimeInterval = 3.5
@@ -100,6 +104,20 @@ final class IslandModel {
     static let wideReserve: CGFloat = 150
     static let wing: CGFloat = 96
     static let expandedWidth: CGFloat = 620
+    /// Used when agents and terminals are shown side by side.
+    static let expandedWidthTwoColumns: CGFloat = 780
+    static let rowHeight: CGFloat = 52, sectionHeaderHeight: CGFloat = 26, overflowRowHeight: CGFloat = 22
+
+    func visible(_ list: [Session]) -> [Session] { Array(list.prefix(max(rowsPerSection, 1))) }
+    func overflow(_ list: [Session]) -> Int { max(list.count - max(rowsPerSection, 1), 0) }
+    /// Agents on the left, terminals on the right, only when there is something in both.
+    var twoColumns: Bool { !sessions.isEmpty && !terminals.isEmpty }
+
+    func sectionHeight(_ list: [Session]) -> CGFloat {
+        guard !list.isEmpty else { return 0 }
+        return Self.sectionHeaderHeight + CGFloat(visible(list).count) * Self.rowHeight
+            + (overflow(list) > 0 ? Self.overflowRowHeight : 0)
+    }
 
     /// Width kept clear in the middle for the system island.
     var centerReserve: CGFloat {
@@ -136,10 +154,10 @@ final class IslandModel {
         case .peek:
             return CGSize(width: wide, height: band + 36)
         case .expanded:
-            let rows = min(sessions.count, 5)
-            let body = 44 + (sessions.isEmpty ? 56 : CGFloat(rows) * 52) + 8
+            let content: CGFloat = sessions.isEmpty && terminals.isEmpty ? 56 : max(sectionHeight(sessions), sectionHeight(terminals))
+            let body = 44 + content + 8
             let card: CGFloat = attention.map(Self.cardHeight) ?? 0
-            return CGSize(width: Self.expandedWidth, height: band + body + card)
+            return CGSize(width: twoColumns ? Self.expandedWidthTwoColumns : Self.expandedWidth, height: band + body + card)
         }
     }
 

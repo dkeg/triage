@@ -11,7 +11,7 @@ let package = Package(
         .executableTarget(name: "Triage", dependencies: ["TriageCore"], path: "Sources/Triage"),
         // Tiny command that Claude Code runs as a hook; forwards to the app over a Unix socket.
         .executableTarget(name: "triage-hook", dependencies: ["TriageCore"], path: "Sources/TriageHook"),
-        .testTarget(name: "TriageTests", dependencies: ["Triage"], path: "Tests/TriageTests"),
+        .testTarget(name: "TriageTests", dependencies: ["Triage"], path: "Tests/TriageTests", exclude: ["Fixtures"]),
         .testTarget(name: "TriageCoreTests", dependencies: ["TriageCore"], path: "Tests/TriageCoreTests"),
     ]
 )

@@ -112,18 +112,58 @@ private struct ExpandedContent: View {
                     .padding(.bottom, 8)
             }
 
-            if model.sessions.isEmpty {
+            if model.sessions.isEmpty && model.terminals.isEmpty {
                 Text("No active sessions")
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.45))
                     .frame(maxWidth: .infinity, minHeight: 56)
-            }
-            ForEach(model.sessions.prefix(5)) { s in
-                SessionRow(session: s) { onJump(s) }
+            } else if model.twoColumns {
+                HStack(alignment: .top, spacing: 6) {
+                    SessionSection(title: "Agents", model: model, list: model.sessions, compact: true, onJump: onJump)
+                    SessionSection(title: "Terminals", model: model, list: model.terminals, compact: true, onJump: onJump)
+                }
+                .padding(.horizontal, 8)
+            } else {
+                SessionSection(title: model.sessions.isEmpty ? "Terminals" : "Agents", model: model,
+                               list: model.sessions.isEmpty ? model.terminals : model.sessions,
+                               compact: false, onJump: onJump)
             }
             Spacer(minLength: 0)
         }
         .padding(.bottom, 8)
+    }
+}
+
+/// A titled group of rows, limited to `rowsPerSection` with a "+N more" line.
+private struct SessionSection: View {
+    let title: String
+    let model: IslandModel
+    let list: [Session]
+    let compact: Bool
+    let onJump: (Session) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(0.6)
+                Text("\(list.count)").font(.system(size: 10, weight: .medium).monospacedDigit())
+                Spacer()
+            }
+            .foregroundStyle(.white.opacity(0.4))
+            .padding(.horizontal, compact ? 14 : 24)
+            .frame(height: IslandModel.sectionHeaderHeight, alignment: .bottom)
+            ForEach(model.visible(list)) { s in
+                SessionRow(session: s, compact: compact) { onJump(s) }
+            }
+            if model.overflow(list) > 0 {
+                Text("+\(model.overflow(list)) more")
+                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, compact ? 14 : 24)
+                    .frame(height: IslandModel.overflowRowHeight)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 
@@ -211,12 +251,13 @@ private struct DiffPreview: View {
 
 private struct SessionRow: View {
     let session: Session
+    var compact = false
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: compact ? 10 : 12) {
                 HostIcon(bundleID: session.hostBundleID, fallback: session.source.symbol, size: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.name).font(.system(size: 12, weight: .medium)).foregroundStyle(.white)
@@ -228,15 +269,15 @@ private struct SessionRow: View {
                 } else {
                     HStack(spacing: 6) {
                         Circle().fill(session.state.color).frame(width: 6, height: 6)
-                        StateLabel(session: session)
+                        StateLabel(session: session, compact: compact)
                     }
                 }
             }
-            .padding(.horizontal, 22)
-            .frame(height: 52)
+            .padding(.horizontal, compact ? 12 : 22)
+            .frame(height: IslandModel.rowHeight)
             .contentShape(Rectangle())
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.white.opacity(hovering ? 0.07 : 0)).padding(.horizontal, 10))
+                .fill(.white.opacity(hovering ? 0.07 : 0)).padding(.horizontal, compact ? 2 : 10))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -247,15 +288,18 @@ private struct SessionRow: View {
 /// "Working 3m 12s" while a turn runs, "Done 2m ago" afterwards.
 private struct StateLabel: View {
     let session: Session
+    var compact = false
     var body: some View {
         Group {
             if session.state == .running, let start = session.turnStartedAt {
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    Text("Working \(Activity.elapsed(ctx.date.timeIntervalSince(start)))")
+                    let t = Activity.elapsed(ctx.date.timeIntervalSince(start))
+                    Text(compact ? t : "\(session.source == .terminal ? "Running" : "Working") \(t)")
                 }
             } else if session.state == .done {
                 TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                    Text("Done \(Activity.ago(ctx.date.timeIntervalSince(session.lastActivity)))")
+                    let t = Activity.ago(ctx.date.timeIntervalSince(session.lastActivity))
+                    Text(compact ? t : "Done \(t)")
                 }
             } else {
                 Text(session.state.label)
