@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(Pref.showIdleTerminals) private var showIdleTerminals = false
     @AppStorage(Pref.showCommandArguments) private var showCommandArguments = true
     @AppStorage(Pref.rowsPerSection) private var rowsPerSection = 4
+    @AppStorage(Pref.cardLayout) private var cardLayout = CardLayout.sideBySide.rawValue
     @AppStorage(Pref.avoidMenuIcons) private var avoidMenuIcons = true
     @State private var screenAccess = SystemIslandProbe.hasPermission
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -100,6 +101,11 @@ struct SettingsView: View {
                 Toggle("Show command arguments", isOn: $showCommandArguments).disabled(!showTerminals)
                 Text("A terminal is listed while something is running in it (a build, a server, ssh). Arguments that look like secrets (tokens, passwords, URL credentials) are masked, but the check is a heuristic, so turn arguments off if you share your screen.")
                     .font(.caption).foregroundStyle(.secondary)
+                Picker("When both are shown", selection: $cardLayout) {
+                    ForEach(CardLayout.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                Text("Side by side puts agents on the left and terminals on the right (a wider card). Single column stacks them. With only one kind running, the card is always a single column.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Stepper("Rows per section: \(rowsPerSection)", value: $rowsPerSection, in: 2...8)
             }
             Section("Claude Code") {
@@ -124,7 +130,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { hooksInstalled = HookInstaller.isInstalled(); screenAccess = SystemIslandProbe.hasPermission }
-        .frame(width: 460, height: 1190)
+        .frame(width: 460, height: 1290)
     }
 
     private func install() {

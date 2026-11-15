@@ -4,6 +4,16 @@ import TriageCore
 
 enum IslandMode: Equatable { case collapsed, peek, expanded }
 
+/// How the open card arranges agents and terminals when both are present.
+enum CardLayout: String, CaseIterable, Identifiable {
+    /// Agents on the left, terminals on the right (a wider card).
+    case sideBySide
+    /// One column: agents, then terminals below them.
+    case single
+    var id: String { rawValue }
+    var label: String { self == .sideBySide ? "Side by side" : "Single column" }
+}
+
 /// Which side of the hardware island the status pill sits on.
 enum PillSide: String, CaseIterable, Identifiable {
     case left, right
@@ -43,6 +53,7 @@ final class IslandModel {
     var terminals: [Session] = []
     /// Most rows shown in each section of the open card.
     var rowsPerSection = 4
+    var cardLayout: CardLayout = .sideBySide
     var pillSide: PillSide = .left
     /// Seconds between "All clear" and "N working".
     var rotateInterval: TimeInterval = 3.5
@@ -108,15 +119,32 @@ final class IslandModel {
     static let expandedWidthTwoColumns: CGFloat = 780
     static let rowHeight: CGFloat = 52, sectionHeaderHeight: CGFloat = 26, overflowRowHeight: CGFloat = 22
 
-    func visible(_ list: [Session]) -> [Session] { Array(list.prefix(max(rowsPerSection, 1))) }
-    func overflow(_ list: [Session]) -> Int { max(list.count - max(rowsPerSection, 1), 0) }
-    /// Agents on the left, terminals on the right, only when there is something in both.
-    var twoColumns: Bool { !sessions.isEmpty && !terminals.isEmpty }
+    /// Rows actually shown per section: the setting, reduced if the card wouldn't fit its panel
+    /// (several sections stacked, or a tall approval card on top).
+    var effectiveRows: Int {
+        let budget = IslandGeometry.canvas.height - bandHeight - 44 - 8 - 12 - (attention.map(Self.cardHeight) ?? 0)
+        var r = max(rowsPerSection, 1)
+        while r > 1 && contentHeight(rows: r) > budget { r -= 1 }
+        return r
+    }
+    func visible(_ list: [Session]) -> [Session] { Array(list.prefix(effectiveRows)) }
+    func overflow(_ list: [Session]) -> Int { max(list.count - effectiveRows, 0) }
 
-    func sectionHeight(_ list: [Session]) -> CGFloat {
+    /// Agents on the left, terminals on the right: only when chosen and there is something in both.
+    var twoColumns: Bool { cardLayout == .sideBySide && !sessions.isEmpty && !terminals.isEmpty }
+
+    func sectionHeight(_ list: [Session], rows r: Int) -> CGFloat {
         guard !list.isEmpty else { return 0 }
-        return Self.sectionHeaderHeight + CGFloat(visible(list).count) * Self.rowHeight
-            + (overflow(list) > 0 ? Self.overflowRowHeight : 0)
+        return Self.sectionHeaderHeight + CGFloat(min(list.count, r)) * Self.rowHeight
+            + (list.count > r ? Self.overflowRowHeight : 0)
+    }
+    func sectionHeight(_ list: [Session]) -> CGFloat { sectionHeight(list, rows: effectiveRows) }
+
+    /// Height of the sessions area for a given row limit.
+    func contentHeight(rows r: Int) -> CGFloat {
+        if sessions.isEmpty && terminals.isEmpty { return 56 }
+        if twoColumns { return max(sectionHeight(sessions, rows: r), sectionHeight(terminals, rows: r)) }
+        return sectionHeight(sessions, rows: r) + sectionHeight(terminals, rows: r)
     }
 
     /// Width kept clear in the middle for the system island.
@@ -154,7 +182,7 @@ final class IslandModel {
         case .peek:
             return CGSize(width: wide, height: band + 36)
         case .expanded:
-            let content: CGFloat = sessions.isEmpty && terminals.isEmpty ? 56 : max(sectionHeight(sessions), sectionHeight(terminals))
+            let content = contentHeight(rows: effectiveRows)
             let body = 44 + content + 8
             let card: CGFloat = attention.map(Self.cardHeight) ?? 0
             return CGSize(width: twoColumns ? Self.expandedWidthTwoColumns : Self.expandedWidth, height: band + body + card)

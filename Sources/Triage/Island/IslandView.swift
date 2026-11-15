@@ -124,9 +124,15 @@ private struct ExpandedContent: View {
                 }
                 .padding(.horizontal, 8)
             } else {
-                SessionSection(title: model.sessions.isEmpty ? "Terminals" : "Agents", model: model,
-                               list: model.sessions.isEmpty ? model.terminals : model.sessions,
-                               compact: false, onJump: onJump)
+                // One column: agents, then terminals (either may be empty).
+                VStack(spacing: 0) {
+                    if !model.sessions.isEmpty {
+                        SessionSection(title: "Agents", model: model, list: model.sessions, compact: false, onJump: onJump)
+                    }
+                    if !model.terminals.isEmpty {
+                        SessionSection(title: "Terminals", model: model, list: model.terminals, compact: false, onJump: onJump)
+                    }
+                }
             }
             Spacer(minLength: 0)
         }

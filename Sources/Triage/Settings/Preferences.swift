@@ -14,6 +14,7 @@ enum Pref {
     static let showIdleTerminals = "showIdleTerminals"
     static let showCommandArguments = "showCommandArguments"
     static let rowsPerSection = "rowsPerSection"
+    static let cardLayout = "cardLayout"
     static let avoidMenuIcons = "avoidMenuIcons"
     static let approvalTimeout = "approvalTimeout"
 }

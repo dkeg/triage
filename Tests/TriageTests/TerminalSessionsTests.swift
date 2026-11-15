@@ -122,4 +122,51 @@ final class SectionLayoutTests: XCTestCase {
     func testEmptyStateStillHasHeight() {
         XCTAssertGreaterThan(model(agents: 0, terminals: 0).size.height, 40)
     }
+
+    func testSingleColumnStacksTheSectionsAndKeepsTheNarrowWidth() {
+        let m = model(agents: 3, terminals: 2)
+        let side = m.size
+        m.cardLayout = .single
+        XCTAssertFalse(m.twoColumns)
+        XCTAssertEqual(m.size.width, IslandModel.expandedWidth)
+        XCTAssertLessThan(m.size.width, side.width)
+        // Stacked: both sections' heights add up, so it is taller than side by side.
+        XCTAssertEqual(m.size.height - side.height, m.sectionHeight(m.terminals), accuracy: 0.5)
+        XCTAssertLessThanOrEqual(m.size.height, IslandGeometry.canvas.height)
+    }
+
+    func testLayoutChoiceDoesNotAffectSingleKindCards() {
+        let a = model(agents: 3, terminals: 0)
+        let before = a.size
+        a.cardLayout = .single
+        XCTAssertEqual(a.size, before)
+        let t = model(agents: 0, terminals: 3)
+        let tBefore = t.size
+        t.cardLayout = .single
+        XCTAssertEqual(t.size, tBefore)
+    }
+
+    func testTheCardNeverOutgrowsItsPanel() {
+        for layout in CardLayout.allCases {
+            let m = model(agents: 12, terminals: 12)
+            m.cardLayout = layout
+            m.rowsPerSection = 8
+            XCTAssertLessThanOrEqual(m.size.height, IslandGeometry.canvas.height, "\(layout)")
+            // ...even with a tall approval request on top.
+            m.addPermission(HookEvent.decode(Data(#"{"hook_event_name":"PermissionRequest","session_id":"p","tool_name":"Bash","tool_input":{"command":"\#(String(repeating: "echo hello ", count: 40))"}}"#.utf8))!) { _ in }
+            XCTAssertLessThanOrEqual(m.size.height, IslandGeometry.canvas.height, "\(layout) with a request")
+        }
+    }
+
+    func testRowsShrinkWhenTheyWouldNotFitAndTheMoreLineCoversTheRest() {
+        let m = model(agents: 12, terminals: 12)
+        m.cardLayout = .single
+        m.rowsPerSection = 8
+        XCTAssertLessThan(m.effectiveRows, 8)
+        XCTAssertEqual(m.visible(m.sessions).count + m.overflow(m.sessions), 12)
+        let roomy = model(agents: 3, terminals: 2)
+        roomy.rowsPerSection = 4
+        XCTAssertEqual(roomy.effectiveRows, 4)                          // plenty of room: setting honoured
+    }
 }
+

@@ -97,6 +97,8 @@ final class IslandController {
         if model.rotateInterval != secs { model.rotateInterval = secs }
         let rows = defaults.object(forKey: Pref.rowsPerSection) as? Int ?? 4
         if model.rowsPerSection != rows { model.rowsPerSection = rows }
+        let layout = CardLayout(rawValue: defaults.string(forKey: Pref.cardLayout) ?? "") ?? .sideBySide
+        if model.cardLayout != layout { model.cardLayout = layout }
         terminalMonitor.scan()
         let nudge = CGFloat(defaults.object(forKey: Pref.pillNudge) as? Double ?? 0)
         if model.pillNudge != nudge { model.pillNudge = nudge }
