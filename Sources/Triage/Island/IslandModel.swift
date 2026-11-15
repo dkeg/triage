@@ -47,7 +47,43 @@ final class IslandModel {
     /// The system island is showing something large (Spotlight/Siri): hide the pill meanwhile.
     var yielding = false
 
-    var hasActivity: Bool { !sessions.isEmpty }
+    /// Menu bar icons (for example ones a menu-bar manager reveals) are showing where the pill would
+    /// be, so it steps aside until they go away.
+    var menuIconsOverlap = false
+    private var iconStreak = 0
+    static let iconEdgeThreshold = 40
+
+    /// Feeds the number of icon edges seen under the pill. The state flips only after two agreeing
+    /// samples, so one odd frame doesn't make the pill flicker.
+    func ingestIconEdges(_ count: Int) {
+        let present = count >= Self.iconEdgeThreshold
+        if present == menuIconsOverlap { iconStreak = 0; return }
+        iconStreak += 1
+        if iconStreak >= 2 { menuIconsOverlap = present; iconStreak = 0 }
+    }
+
+    /// Where the collapsed pill is, in the probe's strip coordinates (points, origin top-left).
+    func pillRectInStrip(stripWidth: CGFloat) -> CGRect {
+        let half = centerReserve / 2
+        let x = pillSide == .left ? stripWidth / 2 - half - Self.wing : stripWidth / 2 + half
+        return CGRect(x: x, y: topInset, width: Self.wing, height: Self.pillHeight)
+    }
+
+    /// Reading waiting for a second confirmation before it is applied (see `ingestIslandReading`).
+    private var pendingIslandReading: CGFloat?
+
+    /// Feeds one measurement of the system island's width. Widening is applied at once, so the pill
+    /// moves aside the moment something (charging, Music, a timer) opens the island. Narrowing, and
+    /// anything huge (Spotlight/Siri), needs two agreeing readings, so a value caught mid-animation
+    /// can't stick. A nil reading changes nothing.
+    func ingestIslandReading(_ reading: CGFloat?) {
+        guard let w = reading else { return }
+        func accept() { measuredIslandWidth = w; pendingIslandReading = nil; yielding = w > 420 }
+        guard let current = measuredIslandWidth else { accept(); return }
+        if abs(w - current) < 4 { pendingIslandReading = nil; return }
+        if w > current && w <= 420 { accept(); return }
+        if let p = pendingIslandReading, abs(p - w) < 6 { accept() } else { pendingIslandReading = w }
+    }
     /// What the pill calls "waiting": approvals and questions, i.e. an agent blocked on you.
     /// (Finished sessions awaiting your next prompt deliberately don't count.)
     var needsInputCount: Int { sessions.filter { $0.state == .needsInput }.count }
@@ -96,12 +132,12 @@ final class IslandModel {
         let wide = centerReserve + Self.wing * 2
         switch mode {
         case .collapsed:
-            return hasActivity && !yielding ? CGSize(width: wide, height: band) : .zero
+            return yielding || menuIconsOverlap ? .zero : CGSize(width: wide, height: band)
         case .peek:
             return CGSize(width: wide, height: band + 36)
         case .expanded:
             let rows = min(sessions.count, 5)
-            let body = 44 + CGFloat(rows) * 52 + 8
+            let body = 44 + (sessions.isEmpty ? 56 : CGFloat(rows) * 52) + 8
             let card: CGFloat = attention.map(Self.cardHeight) ?? 0
             return CGSize(width: Self.expandedWidth, height: band + body + card)
         }

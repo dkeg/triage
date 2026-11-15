@@ -38,8 +38,10 @@ final class IslandMeasureTests: XCTestCase {
         }
     }
 
-    func testDarkBackgroundYieldsNilNotGarbage() {
-        XCTAssertNil(SystemIslandMeasure.width(in: pillImage(widthPt: 136, background: 0.02), scale: 2))
+    func testNearBlackBackgroundStillMeasures() throws {
+        // The old brightness-based search gave up here; finding the island's own black edge does not.
+        let w = try XCTUnwrap(SystemIslandMeasure.width(in: pillImage(widthPt: 136, background: 0.02), scale: 2))
+        XCTAssertEqual(w, 136, accuracy: 8)
     }
 
     func testCenterReserveByMode() {
@@ -115,5 +117,67 @@ final class IslandMeasureTests: XCTestCase {
         m.pillNudge = 1
         XCTAssertEqual(m.topInset, base - 1)
         XCTAssertEqual(m.size.height, height)
+    }
+
+    /// Real captures from a dark blue wallpaper (the old brightness-based edge search found nothing here).
+    func testDarkWallpaperIdleIsland() throws {
+        let w = try XCTUnwrap(SystemIslandMeasure.width(in: try fixture("island_idle_dark.png"), scale: 2))
+        XCTAssertEqual(w, 58, accuracy: 8)
+    }
+
+    /// Live Activity with album art and a waveform: the art must not be mistaken for the island's edge.
+    func testDarkWallpaperActiveIslandWithArt() throws {
+        let w = try XCTUnwrap(SystemIslandMeasure.width(in: try fixture("island_active_dark.png"), scale: 2))
+        XCTAssertEqual(w, 137, accuracy: 8)
+    }
+
+    func testAllBlackStripGivesNoReading() throws {
+        let ctx = CGContext(data: nil, width: 1200, height: 96, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(gray: 0, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 1200, height: 96))
+        XCTAssertNil(SystemIslandMeasure.width(in: ctx.makeImage()!, scale: 2))
+    }
+
+    private func autoModel(islandWidth: CGFloat) -> IslandModel {
+        let m = IslandModel()
+        m.geometry = IslandGeometry(cutout: CGRect(x: 838.5, y: 1093, width: 59, height: 40),
+                                    screenFrame: CGRect(x: 0, y: 0, width: 1736, height: 1133), isPhysical: true)
+        m.pillWidthMode = .auto
+        m.ingestIslandReading(islandWidth)
+        return m
+    }
+
+    /// Real captures: icons revealed to the left of the island vs. a clean menu bar.
+    func testMenuIconsAreDetectedUnderThePill() throws {
+        let busy = autoModel(islandWidth: 137)
+        let busyEdges = SystemIslandMeasure.iconEdgeCount(in: try fixture("island_active_dark.png"), scale: 2,
+                                                          region: busy.pillRectInStrip(stripWidth: 600))
+        XCTAssertGreaterThanOrEqual(busyEdges, IslandModel.iconEdgeThreshold)
+
+        let clean = autoModel(islandWidth: 58)
+        let cleanEdges = SystemIslandMeasure.iconEdgeCount(in: try fixture("island_idle_dark.png"), scale: 2,
+                                                           region: clean.pillRectInStrip(stripWidth: 600))
+        XCTAssertLessThan(cleanEdges, IslandModel.iconEdgeThreshold)
+    }
+
+    func testPillHidesAndReturnsWithTwoAgreeingSamples() {
+        let m = autoModel(islandWidth: 58)
+        m.sessions = IslandModel.mockSessions()
+        XCTAssertNotEqual(m.size, .zero)
+        m.ingestIconEdges(300)
+        XCTAssertNotEqual(m.size, .zero)                 // one sample isn't enough
+        m.ingestIconEdges(300)
+        XCTAssertEqual(m.size, .zero)                    // icons are there: step aside
+        m.ingestIconEdges(0)
+        XCTAssertEqual(m.size, .zero)
+        m.ingestIconEdges(0)
+        XCTAssertNotEqual(m.size, .zero)                 // gone: pill comes back
+    }
+
+    func testPillRectFollowsSideAndReserve() {
+        let m = autoModel(islandWidth: 58)               // reserve 74
+        XCTAssertEqual(m.pillRectInStrip(stripWidth: 600).minX, 300 - 37 - IslandModel.wing)
+        m.pillSide = .right
+        XCTAssertEqual(m.pillRectInStrip(stripWidth: 600).minX, 300 + 37)
     }
 }

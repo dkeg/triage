@@ -29,7 +29,6 @@ struct IslandView: View {
                 .clipShape(shape)
                 // Thin rim, like the system island shows when a Live Activity is active.
                 .overlay(shape.strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5))
-                .shadow(color: .black.opacity(size == .zero ? 0 : 0.35), radius: 10, y: 4)
             }
         }
         .opacity(size == .zero ? 0 : 1)
@@ -113,6 +112,12 @@ private struct ExpandedContent: View {
                     .padding(.bottom, 8)
             }
 
+            if model.sessions.isEmpty {
+                Text("No active sessions")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .frame(maxWidth: .infinity, minHeight: 56)
+            }
             ForEach(model.sessions.prefix(5)) { s in
                 SessionRow(session: s) { onJump(s) }
             }
@@ -375,7 +380,8 @@ private struct FlashingPill<C: View>: View {
             .background(shape.fill(Color.red.opacity(flashing ? (on ? 0.35 : 0.05) : 0)))
             .overlay(shape.strokeBorder(flashing ? Color.red.opacity(on ? 0.95 : 0.35) : Color.white.opacity(0.2),
                                         lineWidth: flashing ? 2 : 1.5))
-            .shadow(color: flashing ? Color.red.opacity(on ? 0.6 : 0.1) : .black.opacity(0.35), radius: flashing ? 10 : 8, y: 3)
+            // Flat like the hardware island; only the pending alert glows.
+            .shadow(color: flashing ? Color.red.opacity(on ? 0.6 : 0.1) : .clear, radius: flashing ? 10 : 0, y: flashing ? 3 : 0)
             .contentShape(shape)
             .onTapGesture(perform: onOpen)
             .onAppear { restart() }

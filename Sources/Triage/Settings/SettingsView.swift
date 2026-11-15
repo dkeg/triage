@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage(Pref.pillSide) private var pillSide = PillSide.left.rawValue
     @AppStorage(Pref.rotateSeconds) private var rotateSeconds = 3.5
     @AppStorage(Pref.pillNudge) private var pillNudge = 0.0
+    @AppStorage(Pref.avoidMenuIcons) private var avoidMenuIcons = true
     @State private var screenAccess = SystemIslandProbe.hasPermission
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
@@ -48,6 +49,9 @@ struct SettingsView: View {
                 Picker("Pill side", selection: $pillSide) {
                     ForEach(PillSide.allCases) { Text($0.label).tag($0.rawValue) }
                 }
+                Toggle("Step aside for menu bar icons", isOn: $avoidMenuIcons)
+                Text("When icons (for example ones your menu bar manager reveals) appear where the pill sits, the pill hides until they're gone. Works with Auto width, which is what lets triage see the menu bar.")
+                    .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Move pill up") {
                     Slider(value: $pillNudge, in: 0...3, step: 0.5) { Text("") }.frame(width: 160)
                     Text(String(format: "%.1fpt", pillNudge)).monospacedDigit().frame(width: 48)
@@ -108,7 +112,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { hooksInstalled = HookInstaller.isInstalled(); screenAccess = SystemIslandProbe.hasPermission }
-        .frame(width: 460, height: 930)
+        .frame(width: 460, height: 1010)
     }
 
     private func install() {

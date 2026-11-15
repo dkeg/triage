@@ -241,4 +241,46 @@ final class SessionStoreTests: XCTestCase {
         m.apply(event("Notification", session: "idle", #","notification_type":"idle_prompt""#))
         XCTAssertEqual(m.waitingCount, 2)                                                           // idle prompt does not count
     }
+
+    func testPillShowsEvenWithNoSessions() {
+        let m = IslandModel()
+        m.geometry = IslandGeometry(cutout: CGRect(x: 838.5, y: 1093, width: 59, height: 40),
+                                    screenFrame: CGRect(x: 0, y: 0, width: 1736, height: 1133), isPhysical: true)
+        XCTAssertTrue(m.sessions.isEmpty)
+        XCTAssertNotEqual(m.size, .zero)
+        m.mode = .expanded
+        XCTAssertGreaterThan(m.size.height, 0)
+    }
+
+    func testWideningIsAppliedImmediatelyNarrowingNeedsConfirmation() {
+        let m = IslandModel()
+        m.ingestIslandReading(58)
+        XCTAssertEqual(m.measuredIslandWidth, 58)             // first reading accepted
+        m.ingestIslandReading(150)                            // e.g. the charging island opens
+        XCTAssertEqual(m.measuredIslandWidth, 150)            // pill moves at once
+        m.ingestIslandReading(100)                            // closing, caught mid-animation
+        XCTAssertEqual(m.measuredIslandWidth, 150)            // not applied yet
+        m.ingestIslandReading(58)
+        XCTAssertEqual(m.measuredIslandWidth, 150)            // still not: 100 and 58 disagree
+        m.ingestIslandReading(58)
+        XCTAssertEqual(m.measuredIslandWidth, 58)             // two agreeing readings
+    }
+
+    func testUnreadableFramesKeepTheLastGoodValue() {
+        let m = IslandModel()
+        m.ingestIslandReading(137)
+        m.ingestIslandReading(nil); m.ingestIslandReading(nil)
+        XCTAssertEqual(m.measuredIslandWidth, 137)
+    }
+
+    func testHugeReadingsNeedConfirmationBeforeHidingThePill() {
+        let m = IslandModel()
+        m.ingestIslandReading(58)
+        m.ingestIslandReading(500)                            // could be a glitch
+        XCTAssertFalse(m.yielding)
+        m.ingestIslandReading(502)                            // Spotlight really is open
+        XCTAssertTrue(m.yielding)
+        m.ingestIslandReading(58); m.ingestIslandReading(58)
+        XCTAssertFalse(m.yielding)
+    }
 }
